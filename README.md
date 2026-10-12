@@ -72,7 +72,7 @@ Use representative out-of-support and aging test machines to prove version class
 | Subscription ID | `<subscription-id>` |
 | Primary resource group | `<monitoring-resource-group>` |
 | Primary Log Analytics workspace | `<log-analytics-workspace>` |
-| Workspace ID (customer ID) | `<workspace-id>` |
+| Log Analytics Workspace ID (customer ID) | `<workspace-id>` |
 | Patch management | Azure Update Manager |
 | Existing change tracking | Change Tracking extensions reporting to `<log-analytics-workspace>` |
 
