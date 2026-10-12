@@ -6,18 +6,34 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
+    [ValidatePattern("^[A-Za-z0-9._-]+$")]
     [string]$MachineName,
 
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$GalleryName
+    [ValidatePattern("^[A-Za-z0-9._-]+$")]
+    [string]$GalleryName,
+
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern("^[A-Za-z0-9._-]+$")]
+    [string]$ApplicationName,
+
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern("^[A-Za-z0-9._-]+$")]
+    [string]$TargetVersion,
+
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern("^[A-Za-z0-9._-]+$")]
+    [string]$RollbackVersion,
+
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern("^[A-Za-z0-9._-]+$")]
+    [string]$TargetRegion
 )
 
 $ErrorActionPreference = "Stop"
-$applicationName = "7zipexe"
-$targetVersion = "26.03.0"
-$rollbackVersion = "0.0.4"
 $apiVersion = "2026-02-01-preview"
+$TargetRegion = $TargetRegion.ToLowerInvariant()
 
 function Get-UniqueResource {
     param(
@@ -56,8 +72,8 @@ resources
 | project id, name, location, status=tostring(properties.status)
 "@
 $machine = Get-UniqueResource -Query $machineQuery -Description "Arc machine '$MachineName'" -AccountId $account.id
-if ($machine.status -ne "Connected" -or $machine.location -ne "westcentralus") {
-    throw "Canary machine must be Connected in westcentralus before deployment."
+if ($machine.status -ne "Connected" -or $machine.location -ne $TargetRegion) {
+    throw "Canary machine must be Connected in $TargetRegion before deployment."
 }
 
 $galleryVersionType = "microsoft.compute/galleries/applications/versions"
@@ -67,7 +83,7 @@ function Get-GalleryVersion {
     $versionQuery = @"
 resources
 | where type =~ '$galleryVersionType'
-| where name =~ '$GalleryName/$applicationName/$Version'
+| where name =~ '$GalleryName/$ApplicationName/$Version'
 | project id, name, location, properties
 "@
     return Get-UniqueResource -Query $versionQuery -Description "approved Gallery application version '$Version'" -AccountId $account.id
@@ -75,22 +91,22 @@ resources
 
 $rollbackGalleryVersion = Get-GalleryVersion -Version $rollbackVersion
 $targetGalleryVersion = Get-GalleryVersion -Version $targetVersion
-$resourceUri = "https://management.azure.com$($machine.id)/applications/$applicationName`?api-version=$apiVersion"
+$resourceUri = "https://management.azure.com$($machine.id)/applications/$ApplicationName`?api-version=$apiVersion"
 
 $currentAssignment = az rest --method get --url $resourceUri --output json | ConvertFrom-Json
 if (
     $LASTEXITCODE -ne 0 -or
     $currentAssignment.properties.packageReferenceId -ne $rollbackGalleryVersion.id
 ) {
-    throw "Canary application must be assigned to the expected rollback version $rollbackVersion before it can be updated."
+    throw "Canary application must be assigned to the expected rollback version $RollbackVersion before it can be updated."
 }
 
 $galleryVersion = az rest --method get --url "https://management.azure.com$($targetGalleryVersion.id)?api-version=2024-03-03" --output json | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0 -or $galleryVersion.properties.provisioningState -ne "Succeeded") {
-    throw "Gallery application version $targetVersion is not in Succeeded state."
+    throw "Gallery application version $TargetVersion is not in Succeeded state."
 }
-if (-not @($galleryVersion.properties.publishingProfile.targetRegions.name | ForEach-Object { $_ -replace "\s", "" } | Where-Object { $_ -eq "westcentralus" })) {
-    throw "Gallery application version $targetVersion is not replicated to westcentralus."
+if (-not @($galleryVersion.properties.publishingProfile.targetRegions.name | ForEach-Object { ($_ -replace "\s", "").ToLowerInvariant() } | Where-Object { $_ -eq $TargetRegion })) {
+    throw "Gallery application version $TargetVersion is not replicated to $TargetRegion."
 }
 
 $body = @{
@@ -101,7 +117,7 @@ $body = @{
         treatFailureAsDeploymentFailure = $false
     }
 } | ConvertTo-Json -Compress
-if ($PSCmdlet.ShouldProcess("$MachineName/$applicationName", "Assign Gallery version $targetVersion (approval $ApprovalId)")) {
+if ($PSCmdlet.ShouldProcess("$MachineName/$ApplicationName", "Assign Gallery version $TargetVersion (approval $ApprovalId)")) {
     az rest --method put --url $resourceUri --body $body --output none
     if ($LASTEXITCODE -ne 0) {
         throw "Azure Arc VM Application update failed."
@@ -111,8 +127,8 @@ if ($PSCmdlet.ShouldProcess("$MachineName/$applicationName", "Assign Gallery ver
         Status = "Accepted"
         ApprovalId = $ApprovalId
         Machine = $MachineName
-        Application = $applicationName
-        PreviousVersion = $rollbackVersion
-        TargetVersion = $targetVersion
+        Application = $ApplicationName
+        PreviousVersion = $RollbackVersion
+        TargetVersion = $TargetVersion
     } | ConvertTo-Json
 }

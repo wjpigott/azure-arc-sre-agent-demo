@@ -92,10 +92,8 @@ assignment is version `0.0.4`. Use the reviewed action, which resolves resource
 identifiers within the active Azure scope:
 
 ```powershell
-.\scripts\Invoke-ArcVmApplicationCanaryDeployment.ps1 `
+.\scripts\Start-ArcVmApplicationCanaryDeployment.ps1 `
   -ApprovalId "CHG-7ZIP-2603-YYYYMMDD-NNN" `
-  -MachineName "<canary-machine>" `
-  -GalleryName "<gallery-name>" `
   -WhatIf
 ```
 

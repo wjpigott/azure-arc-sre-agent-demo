@@ -32,9 +32,9 @@ In Azure SRE Agent **Builder > Skills**, create a skill named
 2. Attach `config/arc-vm-application-deployment-catalog.json` as knowledge after replacing its placeholders.
 3. Enable the Log Analytics query and Azure read/Resource Graph tools.
 4. Add a custom action named `DeployApproved7ZipCanary`. Expose only `approvalId`
-   to the agent; configure the machine and Gallery names as fixed action settings
-   when it runs `Invoke-ArcVmApplicationCanaryDeployment.ps1`. The script
-   discovers Azure scope and resource identifiers at runtime.
+   to the agent. It must run `Start-ArcVmApplicationCanaryDeployment.ps1`, which
+   reads the reviewed catalog, discovers the Azure and package-storage scope,
+   validates it, and invokes the lower-level assignment implementation.
 5. Scope that action to the exact `<canary-machine>` VM Application assignment; do
    not enable a general Azure CLI write tool, Run Command, Automation job
    action, or notification action.
@@ -54,18 +54,15 @@ Only proceed when the assessment is `ReadyForHumanApproval`. Run a what-if first
 from an Azure-authenticated administrative shell:
 
 ```powershell
-.\scripts\Invoke-ArcVmApplicationCanaryDeployment.ps1 `
+.\scripts\Start-ArcVmApplicationCanaryDeployment.ps1 `
   -ApprovalId "CHG-7ZIP-2603-CANARY-001" `
-  -MachineName "<canary-machine>" `
-  -GalleryName "<gallery-name>" `
   -WhatIf
 ```
 
 After review, run the same command without `-WhatIf`. The script resolves the
-required resources within the active Azure scope and fails if a logical target
-is missing or ambiguous. It is deliberately fixed to the `7zipexe` application
-and Gallery version `26.03.0`. Keep the machine and Gallery settings fixed in
-the custom action so the agent cannot select an arbitrary target.
+required resources from the reviewed catalog within the active Azure scope and
+fails if a logical target is missing or ambiguous. The agent cannot select an
+arbitrary machine, Gallery, application, package source, or version.
 
 ## Verify after deployment
 

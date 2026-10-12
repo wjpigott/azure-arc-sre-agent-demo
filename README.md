@@ -120,6 +120,39 @@ and canary installation before disabling an existing access path. See
 [Publish VM applications using managed identity](https://learn.microsoft.com/azure/virtual-machines/vm-applications-publish-with-managed-identity)
 and [Use private endpoints for Azure Storage](https://learn.microsoft.com/azure/storage/common/storage-private-endpoints).
 
+### Discovery and deployment wrapper
+
+Use `scripts/Start-ArcVmApplicationCanaryDeployment.ps1` as the operator and
+SRE Agent entry point. It reads the reviewed deployment catalog and retrieves:
+
+- The active subscription name and identifier.
+- The pilot machine, connection state, resource group, and region.
+- The Compute Gallery and its resource group and managed identity.
+- The approved application, target version, rollback version, and deployment
+  ring.
+- The package source's existing storage account, subscription, and resource
+  group, including storage hosted in another enabled subscription visible to
+  the operator.
+- The storage account's public-network and anonymous-blob-access settings.
+
+The wrapper fails when a required value is missing, remains a placeholder, or
+resolves ambiguously. It also fails when the Gallery has no user-assigned
+managed identity or package storage permits anonymous blob access. It never
+prints the package URL, SAS tokens, resource IDs, or storage credentials.
+
+Run a complete read-only preflight first:
+
+```powershell
+.\scripts\Start-ArcVmApplicationCanaryDeployment.ps1 `
+  -ApprovalId "CHG-APP-CANARY-YYYYMMDD-NNN" `
+  -WhatIf
+```
+
+After reviewing the resolved scope, run the same command without `-WhatIf`.
+The wrapper passes only the catalog-approved values to the lower-level
+assignment script. It discovers and validates existing storage for package
+provenance; it does not create, modify, or delete the storage account.
+
 ## Using `sre.azure.com`
 
 This solution is intended to be operated through
@@ -191,6 +224,8 @@ The current solution automates or assists with:
 
 - Arc machine and software-inventory assessment.
 - Connectivity, extension, and deployment-readiness checks.
+- Subscription, resource-group, Gallery, and package-storage discovery through
+  the catalog-driven PowerShell wrapper.
 - Exact-version deployment proposal generation.
 - The narrowly scoped, approval-gated pilot assignment action.
 - Post-deployment assignment and inventory validation.
