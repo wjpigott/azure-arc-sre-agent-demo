@@ -4,27 +4,22 @@
   "products": [
     {
       "productName": "7-Zip",
-      "galleryResourceGroup": "<gallery-resource-group>",
       "galleryName": "<gallery-name>",
       "galleryApplicationName": "7zipexe",
       "rings": {
         "Canary": {
           "galleryApplicationVersion": "26.03.0",
-          "packageReferenceId": "/subscriptions/<subscription-id>/resourceGroups/<gallery-resource-group>/providers/Microsoft.Compute/galleries/<gallery-name>/applications/7zipexe/versions/26.03.0",
           "regions": [
             "westcentralus"
           ],
-          "rollbackGalleryApplicationVersion": "0.0.4",
-          "rollbackPackageReferenceId": "/subscriptions/<subscription-id>/resourceGroups/<gallery-resource-group>/providers/Microsoft.Compute/galleries/<gallery-name>/applications/7zipexe/versions/0.0.4"
+          "rollbackGalleryApplicationVersion": "0.0.4"
         },
         "Standard": {
           "galleryApplicationVersion": "0.0.4",
-          "packageReferenceId": "/subscriptions/<subscription-id>/resourceGroups/<gallery-resource-group>/providers/Microsoft.Compute/galleries/<gallery-name>/applications/7zipexe/versions/0.0.4",
           "regions": [
             "westcentralus"
           ],
-          "rollbackGalleryApplicationVersion": null,
-          "rollbackPackageReferenceId": null
+          "rollbackGalleryApplicationVersion": null
         }
       },
       "machineAssignments": {

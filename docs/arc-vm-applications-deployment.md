@@ -2,7 +2,7 @@
 
 ## Decision
 
-Use Azure Arc VM Applications as the deployment path. Keep the Hybrid Worker/share as optional lab-only package onboarding:
+Use Azure Arc VM Applications as the deployment path:
 
 ```text
 Customer packaging process publishes immutable Azure Compute Gallery application versions
@@ -14,7 +14,9 @@ Customer packaging process publishes immutable Azure Compute Gallery application
   -> SRE Agent verifies inventory, telemetry, and deployment state
 ```
 
-Azure Compute Gallery VM Applications is the deployment, versioning, targeting, and Azure Activity Log audit lane. The Hybrid Worker/share is not a customer software-distribution service; it is optional for a lab demonstration of controlled package onboarding.
+Azure Compute Gallery VM Applications is the deployment, versioning, targeting,
+and Azure Activity Log audit lane. External package locations are not exposed
+to the SRE Agent.
 
 ## Version-selection policy
 
@@ -43,21 +45,19 @@ If a machine already has a version newer than its ring target, do not downgrade 
 
 ## Why VM Applications is the preferred deployment path
 
-| Capability | Hybrid Worker plus SMB share | Arc VM Applications |
-| --- | --- | --- |
-| Verify external vendor artifact | Yes | Artifact must be prepared first |
-| Immutable version record | Receipt only | Gallery application version |
-| Deploy to Arc machines | Requires a separate installer/remoting mechanism | Native `Microsoft.HybridCompute/machines/applications` resource |
-| Upgrade control | Custom logic | Update assignment to a specific gallery application version |
-| Azure control-plane audit | Runbook job log | Activity Log create/update operations |
-| Fleet inventory | Custom share/receipt scan | Azure Resource Graph query |
-| Rollback | Custom logic | Assign a retained prior gallery application version |
+- **Immutable version record:** Gallery application version.
+- **Native deployment:** VM Application assignment on the Arc machine.
+- **Upgrade control:** Update the assignment to a specific approved version.
+- **Audit:** Azure Activity Log create/update operations.
+- **Fleet inventory:** Azure Resource Graph.
+- **Rollback:** Assign a retained prior Gallery application version.
 
 ## Important boundaries
 
 - VM Applications on Arc is currently a preview feature. Use it only on noncritical lab machines until feature, support, and customer tenancy requirements are confirmed.
 - Arc machine agent version must be 1.61 or newer.
-- Each target must be connected, not expired, and able to reach the Azure Storage Blob endpoint that hosts the gallery package.
+- Each target must be connected, not expired, and able to reach the endpoints
+  required by Azure Arc VM Applications.
 - The gallery application version must be replicated to the Arc machine's Azure region.
 - The package and install/uninstall commands belong to the Gallery application version. `application add` or `application update` assigns that prebuilt version to a machine.
 - Do not use Run Command as the standard installer. Use it only for approved diagnostics, such as retrieving VM Application stdout/stderr after a failed deployment.
@@ -67,10 +67,10 @@ If a machine already has a version newer than its ring target, do not downgrade 
 
 | Requirement | Current state or action |
 | --- | --- |
-| Feature enrollment | Confirm this subscription remains allowlisted for Arc VM Applications preview. |
+| Feature enrollment | Confirm the active Azure scope is enabled for Arc VM Applications preview. |
 | Arc agent | Verify target machine is at least 1.61. `<canary-machine>` is already newer. |
 | Gallery | Existing `<gallery-name>` gallery has `7zipexe` assigned to `<canary-machine>` at version `0.0.4` with `Succeeded` provisioning state. |
-| Network | Allow target Arc machines outbound HTTPS to `*.blob.core.windows.net`. |
+| Network | Allow target Arc machines outbound HTTPS to the endpoints required by Azure Arc VM Applications. |
 | Package source | Use an application version already published through the customer's approved packaging process. |
 | Gallery replication | Publish/replicate the application version to each target Arc machine region, such as West Central US or Central US. |
 | Target | Start with one noncritical, connected x64 Windows Arc machine. |
@@ -87,15 +87,16 @@ Use the 7-Zip example as a separate VM Application deployment proof, not as an a
 6. Verify the Arc application resource instance view, Azure Activity Log, Change Tracking inventory, and post-install health.
 7. Retain the prior Gallery application version before any broader rollout.
 
-The original application-assignment command used version `0.0.3`. The current lab assignment is version `0.0.4`:
+The original application assignment used version `0.0.3`. The current lab
+assignment is version `0.0.4`. Use the reviewed action, which resolves resource
+identifiers within the active Azure scope:
 
 ```powershell
-az connectedmachine application add `
-  --name "7zipexe" `
-  --machine-name "<canary-machine>" `
-  --resource-group "<arc-resource-group>" `
-  --location "westcentralus" `
-  --package-reference-id "/subscriptions/<subscription-id>/resourceGroups/<arc-resource-group>/providers/Microsoft.Compute/galleries/<gallery-name>/applications/7zipexe/versions/0.0.4"
+.\scripts\Invoke-ArcVmApplicationCanaryDeployment.ps1 `
+  -ApprovalId "CHG-7ZIP-2603-YYYYMMDD-NNN" `
+  -MachineName "<canary-machine>" `
+  -GalleryName "<gallery-name>" `
+  -WhatIf
 ```
 
 It does not upload a package or create a Gallery version.
@@ -104,15 +105,8 @@ It does not upload a package or create a Gallery version.
 
 Use [queries/arc-vm-applications.arg](../queries/arc-vm-applications.arg) in Azure Resource Graph to show application assignments across the fleet.
 
-For a single machine's result:
-
-```powershell
-az connectedmachine application show `
-  --name "<application-name>" `
-  --machine-name "<arc-machine-name>" `
-  --resource-group "<resource-group>" `
-  --instance-view
-```
+For a single machine, query its VM Application assignment through the approved
+read-only Azure connection without returning full resource identifiers.
 
 Inspect deployment control-plane activity with:
 

@@ -84,7 +84,7 @@ Status legend: `[x]` completed and evidenced, `[-]` in progress or needs validat
 - [x] Capture the SRE Agent Live Report connector/query pattern as a sanitized deployment template.
 - [ ] Create an approved-version baseline for selected third-party software, beginning with Python and Acrobat.
 - [x] Document the approval-gated third-party software remediation-staging architecture, request schema, notification template, and SRE Agent planning prompt.
-- [ ] Select a noncritical product, approved vendor URL/SHA-256, and restricted staging-share path for the first package-staging demonstration.
+- [ ] Select a noncritical product and approved vendor URL/SHA-256 for the first package-staging demonstration.
 - [ ] Create an SRE Agent `third-party-software-staging` skill with read-only recommendation tools and knowledge files.
 - [ ] Upload a version-verified `approved-versions.json` with no unresolved/blocked entries to the skill before enabling a scheduled lifecycle-review task.
 - [ ] Create the weekly `Third-Party Software Lifecycle Review` scheduled task in Review mode; it creates recommendations only.

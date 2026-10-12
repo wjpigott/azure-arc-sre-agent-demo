@@ -20,7 +20,10 @@ Azure SRE Agent identifies and prioritizes the need. It must not download arbitr
 | Install | Azure Arc VM Applications | Assign/update a specific Gallery application version on approved Arc targets during maintenance. | Separate change approval |
 | Notify | SRE Agent or Logic App | Create a delivery-ready notification only after deployment verification succeeds. | Preview exact content; explicit send approval |
 
-Use only Gallery application versions already approved through the customer's normal software-packaging controls. Do not embed SMB, vendor, or email credentials in an SRE Agent skill, script, or repository. The on-premises SMB staging runner remains an optional lab-only artifact-onboarding demonstration.
+Use only Gallery application versions already approved through the customer's
+normal software-packaging controls. Do not embed infrastructure locations,
+vendor credentials, or email credentials in an SRE Agent skill, script, or
+repository.
 
 ## Required controls
 
@@ -96,8 +99,8 @@ Review the third-party software lifecycle findings. For each product that is bel
 vendor-verified approved version, create a staging recommendation only.
 
 For every recommendation include product, installed and approved version, affected machines,
-vendor release-note source, exact approved vendor download URL, published SHA-256, restricted
-staging-share path, maintenance-window recommendation, and rollback considerations.
+vendor release-note source, exact approved vendor download URL, published SHA-256,
+maintenance-window recommendation, and rollback considerations.
 
 Do not download, copy, install, update, remove, or configure any software. Do not send a
 notification. Mark each recommendation PendingHumanApproval.
@@ -110,8 +113,8 @@ notification. Mark each recommendation PendingHumanApproval.
 | `PendingHumanApproval` | Agent created a recommendation; no package transfer is permitted. |
 | `ApprovedForStaging` | Change owner verified source, checksum, scope, and destination. |
 | `StagingInProgress` | Approved runner is downloading and validating the package. |
-| `StagedVerified` | Package checksum and restricted-share write are verified. |
-| `StagingFailed` | Download, checksum, or share-write failed; do not install. |
+| `StagedVerified` | Package checksum and controlled local write are verified. |
+| `StagingFailed` | Download, checksum, or local write failed; do not install. |
 | `NotificationApproved` | Exact recipient list and message have been approved for send. |
 | `InstallApproved` | A separate approved change authorizes deployment. |
 
@@ -124,7 +127,7 @@ Subject: Software package staged for approved maintenance
 
 The verified <Product> <Version> package is ready for the approved maintenance change.
 
-Staging location: <RestrictedSharePath>
+Staging status: Verified in the controlled runner location
 SHA-256 verification: Passed
 Affected machines: <MachineList>
 Planned maintenance window: <Window>
@@ -137,11 +140,12 @@ No installation has been performed.
 
 Choose one staging execution surface:
 
-1. **Azure Automation Hybrid Runbook Worker** on an on-prem management host - recommended for an SMB share and a customer-like hybrid demo.
+1. **Azure Automation Hybrid Runbook Worker** on an on-prem management host - recommended for a customer-like hybrid demo.
 2. **Azure DevOps/GitHub Actions self-hosted runner** - suitable when the organization already treats package staging as CI/CD.
 3. **Logic App plus an internal API** - suitable for established ITSM and approval workflows.
 
-Build the runner only after selecting a single noncritical package, a staging-share path, and an approved vendor source/checksum process.
+Build the runner only after selecting a single noncritical package and an
+approved vendor source/checksum process.
 
 ## Implemented staging-runner artifact
 

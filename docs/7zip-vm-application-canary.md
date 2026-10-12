@@ -10,9 +10,10 @@
 | Current assigned Gallery version | `0.0.4` |
 | Approved Canary Gallery version | `26.03.0` |
 | Rollback Gallery version | `0.0.4` |
-| Gallery source configured on version | `https://<storage-account-name>.blob.core.windows.net/patches/7z2603-x64.zip` |
 
-The Gallery source Blob does not need public anonymous access. Do not provide a Blob URL to SRE Agent chat or use it as an ad hoc installer source. Azure Arc receives the package through the Gallery application assignment.
+Do not provide an external package location to SRE Agent chat or use one as an
+ad hoc installer source. Azure Arc receives the approved package through the
+Gallery application assignment.
 
 ## Package command preflight
 
@@ -31,8 +32,9 @@ In Azure SRE Agent **Builder > Skills**, create a skill named
 2. Attach `config/arc-vm-application-deployment-catalog.json` as knowledge after replacing its placeholders.
 3. Enable the Log Analytics query and Azure read/Resource Graph tools.
 4. Add a custom action named `DeployApproved7ZipCanary`. Expose only `approvalId`
-   to the agent; configure the subscription, resource group, machine, and gallery
-   parameters as fixed action settings when it runs `Invoke-ArcVmApplicationCanaryDeployment.ps1`.
+   to the agent; configure the machine and Gallery names as fixed action settings
+   when it runs `Invoke-ArcVmApplicationCanaryDeployment.ps1`. The script
+   discovers Azure scope and resource identifiers at runtime.
 5. Scope that action to the exact `<canary-machine>` VM Application assignment; do
    not enable a general Azure CLI write tool, Run Command, Automation job
    action, or notification action.
@@ -54,16 +56,16 @@ from an Azure-authenticated administrative shell:
 ```powershell
 .\scripts\Invoke-ArcVmApplicationCanaryDeployment.ps1 `
   -ApprovalId "CHG-7ZIP-2603-CANARY-001" `
-  -SubscriptionId "<subscription-id>" `
-  -ResourceGroup "<arc-resource-group>" `
   -MachineName "<canary-machine>" `
   -GalleryName "<gallery-name>" `
   -WhatIf
 ```
 
-After review, run the same command without `-WhatIf`. The script is deliberately
-fixed to the `7zipexe` application and Gallery version `26.03.0`. Keep its environment
-parameters fixed in the custom action so the agent cannot select an arbitrary target.
+After review, run the same command without `-WhatIf`. The script resolves the
+required resources within the active Azure scope and fails if a logical target
+is missing or ambiguous. It is deliberately fixed to the `7zipexe` application
+and Gallery version `26.03.0`. Keep the machine and Gallery settings fixed in
+the custom action so the agent cannot select an arbitrary target.
 
 ## Verify after deployment
 

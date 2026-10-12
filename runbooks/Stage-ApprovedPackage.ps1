@@ -13,11 +13,7 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$StagingRoot,
-
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
-    [string]$ShareRoot
+    [string]$StagingRoot
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,23 +27,19 @@ function Get-NormalizedPath {
 
 function Get-LocalStagingPath {
     param(
-        [Parameter(Mandatory = $true)][string]$SharePath,
+        [Parameter(Mandatory = $true)][string]$RelativePath,
         [Parameter(Mandatory = $true)][string]$LocalRoot
     )
 
-    if (
-        $SharePath -ne $shareRoot -and
-        -not $SharePath.StartsWith("$shareRoot\", [System.StringComparison]::OrdinalIgnoreCase)
-    ) {
-        throw "Staging share '$SharePath' is outside the approved share root '$shareRoot'."
+    if ([System.IO.Path]::IsPathRooted($RelativePath)) {
+        throw "Staging path '$RelativePath' must be relative to the approved local root."
     }
 
-    $relativePath = $SharePath.Substring($shareRoot.Length).TrimStart("\")
-    if ([string]::IsNullOrWhiteSpace($relativePath)) {
-        throw "Staging share '$SharePath' must specify a product/version subdirectory."
+    if ([string]::IsNullOrWhiteSpace($RelativePath)) {
+        throw "Staging path must specify a product/version subdirectory."
     }
     $root = Get-NormalizedPath $LocalRoot
-    $destination = Get-NormalizedPath (Join-Path $root $relativePath)
+    $destination = Get-NormalizedPath (Join-Path $root $RelativePath)
 
     if (-not $destination.StartsWith("$root\", [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Resolved staging destination '$destination' is outside '$root'."
@@ -75,7 +67,7 @@ if ($product.stagingStatus -ne "ApprovedForStaging") {
     throw "Product '$ProductName' is not approved for staging. Current status: '$($product.stagingStatus)'."
 }
 
-foreach ($property in @("approvedVersion", "downloadUrl", "sha256", "stagingShare", "releaseNoteUrl", "artifactVerificationMethod")) {
+foreach ($property in @("approvedVersion", "downloadUrl", "sha256", "stagingRelativePath", "releaseNoteUrl", "artifactVerificationMethod")) {
     if ([string]::IsNullOrWhiteSpace([string]$product.$property)) {
         throw "Product '$ProductName' is missing required '$property' data."
     }
@@ -94,7 +86,7 @@ if ($product.artifactVerificationMethod -eq "AuthenticodeAndApprovedHash" -and [
     throw "Product '$ProductName' must specify expectedSignerSubject when using AuthenticodeAndApprovedHash."
 }
 
-$destinationDirectory = Get-LocalStagingPath -SharePath $product.stagingShare -LocalRoot $stagingRoot
+$destinationDirectory = Get-LocalStagingPath -RelativePath $product.stagingRelativePath -LocalRoot $stagingRoot
 New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
 
 $downloadUri = [Uri]$product.downloadUrl
@@ -163,7 +155,6 @@ try {
         artifactVerificationMethod = $product.artifactVerificationMethod
         expectedSignerSubject = $product.expectedSignerSubject
         packagePath = $destinationFile
-        sharePath = $product.stagingShare
         rebootRequired = [bool]$product.rebootRequired
     }
     $receipt | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $receiptPath -Encoding UTF8
@@ -174,7 +165,6 @@ try {
         Version = $product.approvedVersion
         ApprovalId = $ApprovalId
         PackagePath = $destinationFile
-        SharePath = $product.stagingShare
         Sha256 = $actualHash
         ReceiptPath = $receiptPath
     } | ConvertTo-Json -Depth 4

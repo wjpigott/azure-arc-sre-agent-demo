@@ -2,14 +2,14 @@
 
 ## Purpose
 
-`runbooks/Stage-ApprovedPackage.ps1` stages one approved third-party installer from the approved package catalog to the Hyper-V package share.
+`runbooks/Stage-ApprovedPackage.ps1` stages one approved third-party installer
+from the approved package catalog to a controlled local directory.
 
 It runs on the `SRE-Package-Staging` Hybrid Worker on `<package-staging-worker>`:
 
 | Item | Value |
 | --- | --- |
 | Local staging root | `<local-staging-root>` |
-| SMB staging share | `\\<staging-server>\<share-name>` |
 | Automation account | `SRE-Package-Staging` |
 | Hybrid worker group | `SRE-Package-Staging` |
 | Execution identity | `NT AUTHORITY\SYSTEM` |
@@ -24,7 +24,7 @@ The runbook refuses to stage a package unless the catalog entry:
 - Has `stagingStatus` set to `ApprovedForStaging`.
 - Has an approved version, release-note URL, HTTPS download URL, SHA-256, verification method, and staging path.
 - Uses a 64-character SHA-256 value.
-- Targets a subdirectory of the approved package share.
+- Targets a relative subdirectory of the approved local staging root.
 
 It downloads into a temporary local directory, validates SHA-256, validates Authenticode for Windows installer formats, validates the expected signer when specified, moves the verified package to `<local-staging-root>`, and writes a JSON staging receipt beside it.
 
@@ -58,7 +58,8 @@ For the selected product only, update its catalog entry after a change owner val
   "artifactVerificationMethod": "VendorPublishedSha256",
   "expectedSignerSubject": "CN=Expected Publisher, O=Expected Publisher, C=US",
   "stagingStatus": "ApprovedForStaging",
-  "stagingBlocker": null
+  "stagingBlocker": null,
+  "stagingRelativePath": "product\\verified-version"
 }
 ```
 
@@ -83,9 +84,10 @@ ProductName: 7-Zip
 ApprovalId: CHG-000001
 ```
 
-Configure the Automation job with fixed `CatalogPath`, `StagingRoot`, and `ShareRoot`
-values. Do not expose these parameters to SRE Agent or allow an agent request to override
-them; only `ProductName` and `ApprovalId` should be supplied per approved job.
+Configure the Automation job with fixed `CatalogPath` and `StagingRoot` values.
+Do not expose these parameters to SRE Agent or allow an agent request to
+override them; only `ProductName` and `ApprovalId` should be supplied per
+approved job.
 
 Expected successful status: `StagedVerified`.
 
@@ -93,7 +95,6 @@ The receipt and staged package are written under the product/version directory s
 
 ```text
 <local-staging-root>\7zip\<version>\
-\\<staging-server>\<share-name>\7zip\<version>\
 ```
 
 ## First test

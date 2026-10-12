@@ -90,6 +90,156 @@ See [docs/software-remediation-staging.md](docs/software-remediation-staging.md)
 See [docs/arc-vm-applications-deployment.md](docs/arc-vm-applications-deployment.md) for the preferred Azure Arc VM Applications deployment path.
 See [docs/7zip-vm-application-canary.md](docs/7zip-vm-application-canary.md) for the one-machine, approval-gated 7-Zip canary assessment and deployment.
 
+### VM Application package storage networking
+
+The default packaging flow assumes that Azure Compute Gallery can reach the
+package storage account through its public network endpoint. **Public network
+access does not mean anonymous blob access.** Keep anonymous container and blob
+access disabled. The recommended authentication model is a user-assigned
+managed identity attached to the Compute Gallery with only the required blob
+data role on the package storage account; do not place account keys or SAS
+tokens in SRE Agent skills, catalogs, prompts, or deployment output.
+
+An existing approved storage account can be reused instead of creating a
+deployment-specific account. Choose and validate one of these network models
+during package publication:
+
+1. **Public network endpoint:** Allow the Compute Gallery to reach the storage
+   endpoint, keep anonymous blob access disabled, and authenticate with the
+   Gallery managed identity.
+2. **Network-restricted storage:** Reuse an account restricted to approved
+   virtual networks and authenticate the Gallery with its managed identity.
+   Administrative or package-upload clients located on-premises can reach a
+   Blob private endpoint through site-to-site VPN or ExpressRoute private
+   peering. Configure routing and private DNS so the storage hostname resolves
+   to the private endpoint from those clients.
+
+Treat this as a packaging configuration choice, not an SRE Agent deployment
+parameter. Verify package upload, Gallery publication, regional replication,
+and canary installation before disabling an existing access path. See
+[Publish VM applications using managed identity](https://learn.microsoft.com/azure/virtual-machines/vm-applications-publish-with-managed-identity)
+and [Use private endpoints for Azure Storage](https://learn.microsoft.com/azure/storage/common/storage-private-endpoints).
+
+## Using `sre.azure.com`
+
+This solution is intended to be operated through
+[`sre.azure.com`](https://sre.azure.com) so that assessment, approvals,
+packaging, deployment, and validation remain in one traceable thread. Keep the
+agent in Review mode and attach only the read or narrowly scoped write tools
+needed for the current step.
+
+### What `sre.azure.com` is used for
+
+Use `sre.azure.com` to:
+
+- Assess Azure Arc machines before deployment.
+- Verify Change Tracking and software-inventory coverage.
+- Confirm the intended machine and rollout-ring scope.
+- Prepare approved packages and publish VM Application artifacts when a
+  separately reviewed packaging tool is attached.
+- Request and review write actions before deployment.
+- Validate assignment state, inventory evidence, and machine health after
+  deployment.
+
+### Prerequisites
+
+Before using this workflow, confirm:
+
+- The operator and agent connections are using the intended Azure scope.
+- Target Arc machines are onboarded, connected, and visible.
+- Required managed identities have least-privilege access to the Gallery and
+  package storage.
+- Azure Compute Gallery exists and is configured for VM Applications.
+- Package storage is reachable by the Gallery publication flow.
+- Change Tracking and software inventory are reporting for target machines.
+- At least one noncritical pilot machine set is defined.
+- Approved package versions, validation evidence, and rollback versions are
+  recorded in the reviewed catalog.
+
+### Recommended operator flow
+
+1. Open [`sre.azure.com`](https://sre.azure.com).
+2. Start a dedicated thread for the Arc VM Application change.
+3. Ask the agent to assess the intended pilot machines before proposing a
+   change.
+4. Confirm inventory freshness, machine connectivity, region availability,
+   and extension health.
+5. Prepare the application artifact and publish it through the approved
+   packaging process.
+6. Create or update the Azure Compute Gallery VM Application version using a
+   separately reviewed publishing action.
+7. Review the proposed deployment scope, exact version, rollback version, and
+   write action.
+8. Approve deployment only for the intended pilot machines.
+9. Verify assignment state, fresh inventory evidence, machine health, and the
+   application-specific functional test in the same thread.
+
+### Pilot-first approach
+
+Do not start with the full fleet. Expand beyond the pilot only after:
+
+- Package publication and Gallery version creation succeed.
+- Gallery replication is complete in the target region.
+- Pilot machines remain connected and healthy.
+- Software inventory and a functional test confirm the expected result.
+- Failure, rollback, and retest steps are understood and separately
+  approval-gated.
+
+### What is automated and what remains manual
+
+The current solution automates or assists with:
+
+- Arc machine and software-inventory assessment.
+- Connectivity, extension, and deployment-readiness checks.
+- Exact-version deployment proposal generation.
+- The narrowly scoped, approval-gated pilot assignment action.
+- Post-deployment assignment and inventory validation.
+
+Packaging, artifact upload, and Gallery application/version creation can be
+automated only after separate least-privilege tools are implemented, reviewed,
+and attached. They are not capabilities of the current deployment action.
+
+Human review is always required for:
+
+- Choosing and confirming deployment scope.
+- Approving each write action.
+- Confirming that package use and distribution are legally and operationally
+  acceptable.
+- Deciding whether to roll back, retry, or expand beyond the pilot.
+
+### Known limitations
+
+- Disconnected or powered-off Arc machines cannot be validated reliably.
+- Software inventory can lag behind the actual installation state.
+- Package-storage authentication, network rules, routing, or DNS can block
+  publication.
+- Gallery replication can delay regional availability.
+- Vendor licensing or redistribution terms can restrict packaging.
+- A reviewed action binding may cover only a subset of machines and must not be
+  treated as fleet-wide authorization.
+
+### Suggested prompt pattern
+
+Start with a read-only assessment:
+
+```text
+Assess the approved pilot Arc machines for VM Application readiness.
+Check connectivity, inventory freshness, extension health, current assignment,
+target-version availability, and rollback readiness. Do not make any changes.
+Return ReadyForHumanApproval, ManualReview, or NotReady for each machine with
+the supporting evidence.
+```
+
+After reviewing the assessment, request a proposal rather than an immediate
+deployment:
+
+```text
+Prepare the exact-version VM Application deployment proposal for only the
+pilot machines classified ReadyForHumanApproval. Show the target and rollback
+versions and the proposed write action, then wait for explicit approval.
+Do not package, publish, deploy, retry, roll back, or expand the scope yet.
+```
+
 ## Azure SRE Agent setup
 
 Deploy `<sre-agent-name>` in `<sre-agent-resource-group>`. Give it a Log Analytics connector for `<log-analytics-workspace>` and read access to the intended Arc scope.
