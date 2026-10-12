@@ -1,5 +1,5 @@
 {
-  "reviewedOn": "2026-09-03",
+  "reviewedOn": "2026-10-12",
   "policy": "Only set an approvedVersion after verifying it in the vendor's authoritative release documentation. Do not classify an installed product as out of date when approvedVersion is null.",
   "products": [
     {
@@ -42,7 +42,8 @@
       "inventoryMatch": "SoftwareName has 'Google Chrome'",
       "publisherMatch": "Publisher has 'Google'",
       "approvedVersion": null,
-      "source": "https://chromereleases.googleblog.com/"
+      "source": "https://chromereleases.googleblog.com/",
+      "notes": "Chrome uses a four-part vendor version. Keep approvedVersion null until the exact enterprise build is approved; track any separate three-part Azure Compute Gallery version in the deployment catalog."
     }
   ]
 }

@@ -97,6 +97,26 @@ The receipt and staged package are written under the product/version directory s
 <local-staging-root>\7zip\<version>\
 ```
 
+## Chrome staging template
+
+`config/software-staging-catalog.json` includes a blocked Chrome entry. It is
+not approval to download or publish Chrome. Complete all of these fields before
+changing `stagingStatus`:
+
+- Four-part approved Chrome vendor version.
+- Unique three-part Gallery version.
+- Immutable, authorized source URL.
+- Approved SHA-256 and verification method.
+- Expected Authenticode signer.
+- Exact package file name.
+- Reviewed install and remove commands.
+
+The template specifies `BlockBlob`. Do not change it to `PageBlob` solely
+because Gallery version creation failed. VM Application packages support block
+blobs, and installer publication failures are more commonly caused by version
+format, source accessibility, Gallery identity RBAC, storage network rules, or
+invalid commands.
+
 ## First test
 
 Do not bypass the catalog controls. The first successful test must use:

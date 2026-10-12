@@ -1,6 +1,6 @@
 {
   "_description": "Ring-specific Azure Arc VM Application deployment targets. SRE assessment uses this catalog; it must not select a vendor latest release automatically.",
-  "_lastReviewed": "2026-09-04",
+  "_lastReviewed": "2026-10-12",
   "products": [
     {
       "productName": "7-Zip",
@@ -24,6 +24,24 @@
       },
       "machineAssignments": {
         "<canary-machine>": "Canary"
+      }
+    },
+    {
+      "productName": "Google Chrome",
+      "galleryName": "<gallery-name>",
+      "galleryApplicationName": "chromewin",
+      "rings": {
+        "Canary": {
+          "vendorVersion": "<approved-chrome-vendor-version>",
+          "galleryApplicationVersion": "<approved-three-part-gallery-version>",
+          "regions": [
+            "<chrome-target-region>"
+          ],
+          "rollbackGalleryApplicationVersion": "<approved-chrome-rollback-gallery-version>"
+        }
+      },
+      "machineAssignments": {
+        "<chrome-canary-machine>": "Canary"
       }
     }
   ]

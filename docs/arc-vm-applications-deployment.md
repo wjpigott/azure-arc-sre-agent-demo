@@ -99,6 +99,53 @@ identifiers within the active Azure scope:
 
 It does not upload a package or create a Gallery version.
 
+## Chrome template guidance
+
+Chrome can use the same catalog-driven deployment scripts; do not add
+Chrome-specific branching to them. Add a separate product record and bind a
+separate SRE Agent action to:
+
+```powershell
+.\scripts\Start-ArcVmApplicationCanaryDeployment.ps1 `
+  -ApprovalId "<approval-id>" `
+  -ProductName "Google Chrome"
+```
+
+Expose only `approvalId` to the agent.
+
+Chrome's vendor version has four numeric components, while an Azure Compute
+Gallery application version uses three. Store both values and require an
+explicit, unique mapping. Never silently truncate the fourth component or
+derive a new version by incrementing another component. A tested mapping from
+one environment is evidence for that deployment only, not a reusable policy.
+
+Before publication, record:
+
+- The exact approved Chrome enterprise vendor version.
+- The unique three-part Gallery version.
+- The immutable and legally permitted package source.
+- SHA-256 and Authenticode signer evidence.
+- The exact package file name as downloaded by VM Applications.
+- Reviewed silent install, update, and remove commands.
+- Target region, pilot machine, and retained rollback Gallery version.
+- The exact storage prerequisite that was required, with its security impact.
+
+Use a block blob for the installer by default. Current VM Application guidance
+supports block blobs and page blobs, but page blobs are not required for a
+Chrome installer. Diagnose version format, package URL, Gallery managed
+identity, `Storage Blob Data Contributor`, storage networking, and command
+quoting before changing blob type.
+
+If the tested package file is `chrome_installer_uncompressed.exe`, the reported
+silent command is:
+
+```text
+chrome_installer_uncompressed.exe /silent /install
+```
+
+Validate that exact file name and command against the approved artifact before
+publishing; do not copy it into an active catalog entry automatically.
+
 ## Monitor VM Applications
 
 Use [queries/arc-vm-applications.arg](../queries/arc-vm-applications.arg) in Azure Resource Graph to show application assignments across the fleet.

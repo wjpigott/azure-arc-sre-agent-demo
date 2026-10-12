@@ -1,5 +1,22 @@
 {
-  "reviewedOn": "2026-09-03",
+  "reviewedOn": "2026-10-12",
   "policy": "Entries must use a vendor-authoritative HTTPS source and a vendor-published SHA-256 value. Do not stage a product until its version, source URL, checksum, support channel, and approval status are verified.",
-  "packages": []
+  "packages": [
+    {
+      "productId": "google-chrome",
+      "displayName": "Google Chrome",
+      "vendorVersion": null,
+      "galleryVersion": null,
+      "sourceUrl": null,
+      "sha256": null,
+      "packageFileName": null,
+      "blobType": "BlockBlob",
+      "artifactVerificationMethod": null,
+      "expectedSignerSubject": null,
+      "installCommand": null,
+      "removeCommand": null,
+      "stagingStatus": "BlockedPendingApprovalEvidence",
+      "stagingBlocker": "Record an approved four-part Chrome vendor version, a unique three-part Gallery version, an immutable authorized package source, SHA-256, signer evidence, exact package file name, reviewed install/remove commands, and change approval before publishing."
+    }
+  ]
 }

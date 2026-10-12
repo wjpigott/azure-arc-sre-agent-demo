@@ -229,6 +229,37 @@ not grant subscription-wide access. The calling identity must have permission
 to create Azure role assignments. Subsequent deployments should omit the
 switch because the wrapper will validate the existing assignment.
 
+### Adding another catalog product
+
+The wrapper is product-generic, but its default product is `7-Zip`. A Chrome
+action must call it with a fixed product binding:
+
+```powershell
+.\scripts\Start-ArcVmApplicationCanaryDeployment.ps1 `
+  -ApprovalId "CHG-CHROME-CANARY-YYYYMMDD-NNN" `
+  -ProductName "Google Chrome" `
+  -WhatIf
+```
+
+Do not expose `ProductName` as free-form SRE Agent input. Create a separate
+Chrome action that accepts only `approvalId` and fixes `ProductName` to
+`Google Chrome`.
+
+The public catalog contains a blocked-by-default Chrome template. Before using
+it, replace every Chrome placeholder with reviewed values. Keep these versions
+separate:
+
+- `vendorVersion`: the full four-part Chrome version, such as
+  `Major.Minor.Build.Patch`.
+- `galleryApplicationVersion`: a unique Azure Compute Gallery-compatible
+  three-part version.
+
+Do not truncate or increment Chrome versions automatically. Record and approve
+the mapping so every Gallery version maps back to exactly one vendor artifact.
+Also complete the immutable source, SHA-256, signer evidence, package file
+name, install/remove commands, rollback version, target region, and pilot
+machine before changing the staging status.
+
 ## Using `sre.azure.com`
 
 This solution is intended to be operated through
@@ -350,6 +381,49 @@ pilot machines classified ReadyForHumanApproval. Show the target and rollback
 versions and the proposed write action, then wait for explicit approval.
 Do not package, publish, deploy, retry, roll back, or expand the scope yet.
 ```
+
+### Options for reducing approval pauses
+
+Azure SRE Agent separates **resource permission** from **run mode**:
+
+| Control | Options | Effect |
+| --- | --- | --- |
+| Managed-resource permission | `Reader`, `Privileged` | Determines what the agent is allowed to do. |
+| Task or response-plan run mode | `Review`, `Autonomous` | Determines whether Azure infrastructure actions wait for approval. |
+
+Changing only one control does not remove all pauses:
+
+- `Privileged` plus `Review` lets the agent perform the action after an SRE
+  Agent Administrator approves it.
+- `Reader` plus `Autonomous` still cannot perform writes with its standing
+  identity and can prompt for temporary on-behalf-of access.
+- `Privileged` plus `Autonomous` can execute permitted actions without waiting
+  for approval.
+
+Use these operating patterns:
+
+1. **Production deployment (recommended):** Keep the deployment action in
+   Review mode with the smallest custom permission scope. This preserves the
+   approval checkpoint.
+2. **Autonomous assessment:** Run inventory, connectivity, and validation tasks
+   autonomously with Reader access because they do not change resources.
+3. **Trusted nonproduction deployment:** After repeated successful reviewed
+   runs, use Autonomous mode only for a dedicated task or response plan whose
+   action is fixed to the product, ring, and pilot resources.
+4. **Split workflow:** Run packaging preflight and post-deployment validation
+   autonomously, but keep package publication, RBAC changes, Gallery version
+   creation, deployment, retry, and rollback in Review mode.
+
+Do not grant broad subscription Contributor merely to avoid a pause. Prefer a
+custom action and RBAC scope limited to the required Gallery application,
+package storage operation, or selected VM Application assignments. Review mode
+only gates Azure infrastructure operations; use
+[Hooks](https://learn.microsoft.com/azure/sre-agent/agent-hooks) or
+[Tool Access Policies](https://learn.microsoft.com/azure/sre-agent/tool-access-policies)
+for governance over other tools and external actions.
+
+See [Run modes in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/run-modes)
+and [Manage permissions for Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/manage-permissions).
 
 ## Azure SRE Agent setup
 
