@@ -72,9 +72,64 @@ Use representative out-of-support and aging test machines to prove version class
 | Subscription ID | `<subscription-id>` |
 | Primary resource group | `<monitoring-resource-group>` |
 | Primary Log Analytics workspace | `<log-analytics-workspace>` |
-| Workspace ID | `<workspace-id>` |
+| Workspace ID (customer ID) | `<workspace-id>` |
 | Patch management | Azure Update Manager |
 | Existing change tracking | Change Tracking extensions reporting to `<log-analytics-workspace>` |
+
+### Finding the Log Analytics Workspace ID
+
+`<workspace-id>` is the Log Analytics **Workspace ID**, also returned by Azure
+as the workspace `customerId`. It is a GUID that identifies the Log Analytics
+data workspace to agents, ingestion endpoints, and connectivity tests.
+
+It is not any of the following:
+
+- The Azure subscription ID.
+- The Microsoft Entra tenant ID.
+- The full Azure resource ID beginning with `/subscriptions/...`.
+- A workspace primary or secondary shared key.
+
+To find it in the Azure portal:
+
+1. Open **Azure portal** > **Log Analytics workspaces**.
+2. Select the workspace named in `<log-analytics-workspace>`.
+3. On **Overview**, copy **Workspace ID** from the workspace details.
+4. If it is not displayed on Overview, open **Settings** > **Agents** and copy
+   the Workspace ID shown with the agent connection information.
+
+To retrieve it with Azure CLI:
+
+```powershell
+az monitor log-analytics workspace show `
+  --resource-group "<workspace-resource-group>" `
+  --workspace-name "<log-analytics-workspace>" `
+  --query customerId `
+  --output tsv
+```
+
+To retrieve it with Azure PowerShell:
+
+```powershell
+(Get-AzOperationalInsightsWorkspace `
+  -ResourceGroupName "<workspace-resource-group>" `
+  -Name "<log-analytics-workspace>").CustomerId.Guid
+```
+
+Some deployment steps instead require the workspace's full Azure resource ID.
+Retrieve that separately:
+
+```powershell
+az monitor log-analytics workspace show `
+  --resource-group "<workspace-resource-group>" `
+  --workspace-name "<log-analytics-workspace>" `
+  --query id `
+  --output tsv
+```
+
+Use the `customerId` result wherever this repository says `<workspace-id>`.
+Use the `id` result for parameters such as `WorkspaceResourceId`. The Workspace
+ID is an identifier rather than a credential, but workspace shared keys are
+secrets and must never be committed to this repository.
 
 See [docs/environment.md](docs/environment.md) for the tracked environment baseline and [docs/deployment-history.md](docs/deployment-history.md) for the initial telemetry rollout.
 See [docs/deploy-azure-sre-agent.md](docs/deploy-azure-sre-agent.md) for the first agent deployment and least-privilege configuration.
