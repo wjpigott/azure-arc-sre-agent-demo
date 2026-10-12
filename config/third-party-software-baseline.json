@@ -1,0 +1,48 @@
+{
+  "reviewedOn": "2026-09-03",
+  "policy": "Only set an approvedVersion after verifying it in the vendor's authoritative release documentation. Do not classify an installed product as out of date when approvedVersion is null.",
+  "products": [
+    {
+      "id": "adobe-acrobat",
+      "displayName": "Adobe Acrobat",
+      "inventoryMatch": "SoftwareName has 'Adobe Acrobat'",
+      "publisherMatch": "Publisher has 'Adobe'",
+      "approvedVersion": null,
+      "source": "https://helpx.adobe.com/acrobat/release-note/release-notes-acrobat-reader.html",
+      "notes": "Track the Acrobat application separately from Adobe Refresh Manager."
+    },
+    {
+      "id": "7-zip",
+      "displayName": "7-Zip",
+      "inventoryMatch": "SoftwareName has '7-Zip'",
+      "publisherMatch": "Publisher has 'Igor Pavlov'",
+      "approvedVersion": null,
+      "source": "https://www.7-zip.org/history.txt"
+    },
+    {
+      "id": "python",
+      "displayName": "Python",
+      "inventoryMatch": "SoftwareName has 'Python'",
+      "publisherMatch": "Publisher has 'Python Software Foundation'",
+      "approvedVersion": null,
+      "source": "https://www.python.org/downloads/",
+      "notes": "Windows registered runtimes are visible. Virtual environments and pip packages require a separate approved collection."
+    },
+    {
+      "id": "oracle-java-8",
+      "displayName": "Oracle Java 8",
+      "inventoryMatch": "SoftwareName has_any ('Java 8', 'JRE 8')",
+      "publisherMatch": "Publisher has 'Oracle'",
+      "approvedVersion": null,
+      "source": "https://www.oracle.com/java/technologies/javase/8u211-relnotes.html"
+    },
+    {
+      "id": "google-chrome",
+      "displayName": "Google Chrome",
+      "inventoryMatch": "SoftwareName has 'Google Chrome'",
+      "publisherMatch": "Publisher has 'Google'",
+      "approvedVersion": null,
+      "source": "https://chromereleases.googleblog.com/"
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+# 7-Zip Azure Arc VM Application Canary
+
+## Current target
+
+| Field | Value |
+| --- | --- |
+| Canary machine | `<canary-machine>` |
+| Machine region | West Central US |
+| Application assignment | `7zipexe` |
+| Current assigned Gallery version | `0.0.4` |
+| Approved Canary Gallery version | `26.03.0` |
+| Rollback Gallery version | `0.0.4` |
+| Gallery source configured on version | `https://<storage-account-name>.blob.core.windows.net/patches/7z2603-x64.zip` |
+
+The Gallery source Blob does not need public anonymous access. Do not provide a Blob URL to SRE Agent chat or use it as an ad hoc installer source. Azure Arc receives the package through the Gallery application assignment.
+
+## Package command preflight
+
+Before deploying, inspect version `26.03.0` in the Gallery. Its package source is
+named `7z2603-x64.zip`, while the configured install action includes
+`ren 7z2603 7z2603.zip`. Confirm that this command is correct for the file name
+presented to the Arc VM Applications runtime. If it is not, create a new Gallery
+version with the corrected command; do not alter an existing version in place.
+
+## Create the read-only SRE Agent skill
+
+In Azure SRE Agent **Builder > Skills**, create a skill named
+`arc-vm-application-7zip-canary`.
+
+1. Use the assessment and approval policy in this document as the skill instruction.
+2. Attach `config/arc-vm-application-deployment-catalog.json` as knowledge after replacing its placeholders.
+3. Enable the Log Analytics query and Azure read/Resource Graph tools.
+4. Add a custom action named `DeployApproved7ZipCanary`. Expose only `approvalId`
+   to the agent; configure the subscription, resource group, machine, and gallery
+   parameters as fixed action settings when it runs `Invoke-ArcVmApplicationCanaryDeployment.ps1`.
+5. Scope that action to the exact `<canary-machine>` VM Application assignment; do
+   not enable a general Azure CLI write tool, Run Command, Automation job
+   action, or notification action.
+6. Save the skill.
+
+Use this chat request:
+
+```text
+Assess 7-Zip on <canary-machine> using the approved Canary policy.
+If it is eligible, ask for explicit deployment approval. Do not make a change
+unless I provide the full approval sentence requested by the skill.
+```
+
+## Controlled canary deployment
+
+Only proceed when the assessment is `ReadyForHumanApproval`. Run a what-if first
+from an Azure-authenticated administrative shell:
+
+```powershell
+.\scripts\Invoke-ArcVmApplicationCanaryDeployment.ps1 `
+  -ApprovalId "CHG-7ZIP-2603-CANARY-001" `
+  -SubscriptionId "<subscription-id>" `
+  -ResourceGroup "<arc-resource-group>" `
+  -MachineName "<canary-machine>" `
+  -GalleryName "<gallery-name>" `
+  -WhatIf
+```
+
+After review, run the same command without `-WhatIf`. The script is deliberately
+fixed to the `7zipexe` application and Gallery version `26.03.0`. Keep its environment
+parameters fixed in the custom action so the agent cannot select an arbitrary target.
+
+## Verify after deployment
+
+Wait for the application assignment to reach `Succeeded`, then validate:
+
+1. Arc VM Application instance view and Azure Activity Log.
+2. Change Tracking inventory shows the expected 7-Zip version.
+3. A basic archive create/extract check succeeds on `<canary-machine>`.
+4. No new health, connectivity, or application errors occur.
+
+If verification fails, assign the retained rollback Gallery version `0.0.4` through
+the same reviewed process; do not invoke an unreviewed uninstall command.

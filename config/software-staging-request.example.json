@@ -1,0 +1,21 @@
+{
+  "requestId": "SW-STAGE-YYYYMMDD-001",
+  "createdAt": "YYYY-MM-DDTHH:MM:SSZ",
+  "requestedBy": "SRE Agent",
+  "approvalStatus": "PendingHumanApproval",
+  "purpose": "Stage a verified vendor package for a non-production maintenance window.",
+  "packages": [
+    {
+      "productId": "example-product",
+      "approvedVersion": "0.0.0",
+      "sourceUrl": "https://vendor.example/downloads/example-installer.msi",
+      "sha256": "VENDOR_PUBLISHED_SHA256",
+      "targetPath": "\\\\fileserver\\software-staging\\example-product\\0.0.0\\example-installer.msi",
+      "affectedMachines": [
+        "example-server"
+      ],
+      "risk": "Medium",
+      "verificationSource": "https://vendor.example/release-notes"
+    }
+  ]
+}

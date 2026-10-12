@@ -1,0 +1,66 @@
+{
+  "location": "centralus",
+  "properties": {
+    "dataSources": {
+      "performanceCounters": [
+        {
+          "name": "SRELinuxPerformance",
+          "streams": [
+            "Microsoft-Perf"
+          ],
+          "samplingFrequencyInSeconds": 60,
+          "counterSpecifiers": [
+            "\\Processor(*)\\% Processor Time",
+            "\\Memory\\Available MBytes",
+            "\\Logical Disk(*)\\% Used Space",
+            "\\Logical Disk(*)\\Free Megabytes"
+          ]
+        }
+      ],
+      "syslog": [
+        {
+          "name": "SRELinuxErrors",
+          "streams": [
+            "Microsoft-Syslog"
+          ],
+          "facilityNames": [
+            "*"
+          ],
+          "logLevels": [
+            "Warning",
+            "Error",
+            "Critical",
+            "Alert",
+            "Emergency"
+          ]
+        }
+      ]
+    },
+    "destinations": {
+      "logAnalytics": [
+        {
+          "name": "SreLogAnalytics",
+          "workspaceResourceId": "<workspace-resource-id>"
+        }
+      ]
+    },
+    "dataFlows": [
+      {
+        "streams": [
+          "Microsoft-Perf"
+        ],
+        "destinations": [
+          "SreLogAnalytics"
+        ]
+      },
+      {
+        "streams": [
+          "Microsoft-Syslog"
+        ],
+        "destinations": [
+          "SreLogAnalytics"
+        ]
+      }
+    ]
+  }
+}

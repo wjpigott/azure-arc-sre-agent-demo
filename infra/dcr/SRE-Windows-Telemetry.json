@@ -1,0 +1,62 @@
+{
+  "location": "centralus",
+  "properties": {
+    "dataSources": {
+      "performanceCounters": [
+        {
+          "name": "SREWindowsPerformance",
+          "streams": [
+            "Microsoft-Perf"
+          ],
+          "samplingFrequencyInSeconds": 60,
+          "counterSpecifiers": [
+            "\\Processor Information(_Total)\\% Processor Time",
+            "\\Memory\\Available MBytes",
+            "\\LogicalDisk(*)\\% Free Space",
+            "\\LogicalDisk(*)\\Free Megabytes",
+            "\\System\\System Up Time"
+          ]
+        }
+      ],
+      "windowsEventLogs": [
+        {
+          "name": "SREWindowsErrors",
+          "streams": [
+            "Microsoft-Event"
+          ],
+          "xPathQueries": [
+            "Application!*[System[(Level=1 or Level=2)]]",
+            "System!*[System[(Level=1 or Level=2)]]",
+            "Microsoft-Windows-WindowsUpdateClient/Operational!*[System[(Level=1 or Level=2 or Level=3)]]"
+          ]
+        }
+      ]
+    },
+    "destinations": {
+      "logAnalytics": [
+        {
+          "name": "SreLogAnalytics",
+          "workspaceResourceId": "<workspace-resource-id>"
+        }
+      ]
+    },
+    "dataFlows": [
+      {
+        "streams": [
+          "Microsoft-Perf"
+        ],
+        "destinations": [
+          "SreLogAnalytics"
+        ]
+      },
+      {
+        "streams": [
+          "Microsoft-Event"
+        ],
+        "destinations": [
+          "SreLogAnalytics"
+        ]
+      }
+    ]
+  }
+}

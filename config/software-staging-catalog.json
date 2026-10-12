@@ -1,0 +1,5 @@
+{
+  "reviewedOn": "2026-09-03",
+  "policy": "Entries must use a vendor-authoritative HTTPS source and a vendor-published SHA-256 value. Do not stage a product until its version, source URL, checksum, support channel, and approval status are verified.",
+  "packages": []
+}

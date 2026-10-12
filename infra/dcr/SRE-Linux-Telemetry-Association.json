@@ -1,0 +1,6 @@
+{
+  "properties": {
+    "dataCollectionRuleId": "<data-collection-rule-id>",
+    "description": "Read-only SRE telemetry baseline"
+  }
+}

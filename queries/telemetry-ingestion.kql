@@ -1,0 +1,4 @@
+union isfuzzy=true Perf, Event, Syslog
+| where TimeGenerated > ago(30m)
+| summarize Records = count(), Latest = max(TimeGenerated) by Type
+| order by Type asc

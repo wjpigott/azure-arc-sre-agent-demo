@@ -1,0 +1,35 @@
+{
+  "_description": "Ring-specific Azure Arc VM Application deployment targets. SRE assessment uses this catalog; it must not select a vendor latest release automatically.",
+  "_lastReviewed": "2026-09-04",
+  "products": [
+    {
+      "productName": "7-Zip",
+      "galleryResourceGroup": "<gallery-resource-group>",
+      "galleryName": "<gallery-name>",
+      "galleryApplicationName": "7zipexe",
+      "rings": {
+        "Canary": {
+          "galleryApplicationVersion": "26.03.0",
+          "packageReferenceId": "/subscriptions/<subscription-id>/resourceGroups/<gallery-resource-group>/providers/Microsoft.Compute/galleries/<gallery-name>/applications/7zipexe/versions/26.03.0",
+          "regions": [
+            "westcentralus"
+          ],
+          "rollbackGalleryApplicationVersion": "0.0.4",
+          "rollbackPackageReferenceId": "/subscriptions/<subscription-id>/resourceGroups/<gallery-resource-group>/providers/Microsoft.Compute/galleries/<gallery-name>/applications/7zipexe/versions/0.0.4"
+        },
+        "Standard": {
+          "galleryApplicationVersion": "0.0.4",
+          "packageReferenceId": "/subscriptions/<subscription-id>/resourceGroups/<gallery-resource-group>/providers/Microsoft.Compute/galleries/<gallery-name>/applications/7zipexe/versions/0.0.4",
+          "regions": [
+            "westcentralus"
+          ],
+          "rollbackGalleryApplicationVersion": null,
+          "rollbackPackageReferenceId": null
+        }
+      },
+      "machineAssignments": {
+        "<canary-machine>": "Canary"
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+// Log Analytics KQL only. Run in the <log-analytics-workspace> workspace, not Azure Resource Graph.
+ConfigurationData
+| where ConfigDataType == "Software"
+| where Publisher !has "Microsoft"
+| where SoftwareName !has "Update for" and SoftwareName !has "Security Update"
+    and SoftwareName !has "Hotfix for" and SoftwareName !has "Definition Update"
+| summarize arg_max(TimeGenerated, *) by Computer, SoftwareName
+| project Computer, SoftwareName, CurrentVersion, Publisher, TimeGenerated
+| extend Status = case(
+    SoftwareName has "Java 8" and SoftwareName !has "Auto Updater"
+        and CurrentVersion !has "503", "OUTDATED - Critical",
+    SoftwareName has "7-Zip" and CurrentVersion != "26.02", "OUTDATED - Medium",
+    SoftwareName has "Google Chrome"
+        and CurrentVersion != "152.0.7977.75"
+        and CurrentVersion != "152.0.7977.76", "OUTDATED - Low",
+    SoftwareName has "Adobe Acrobat" and CurrentVersion != "26.002.21869", "OUTDATED - Medium",
+    Publisher !has "Microsoft", "Untracked",
+    "Current"
+  )
+| sort by Status asc, SoftwareName asc, Computer asc

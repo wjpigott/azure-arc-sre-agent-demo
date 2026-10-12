@@ -1,0 +1,17 @@
+{
+  "reviewedOn": "2026-08-31",
+  "source": "https://learn.microsoft.com/en-us/azure/azure-arc/servers/agent-release-notes",
+  "supportPolicy": "Microsoft supports Azure Connected Machine agent releases from the preceding 12 months.",
+  "currentRelease": "1.67",
+  "approvedStandardRelease": "1.66",
+  "minimumSupportedRelease": "1.57",
+  "canaryObservationDays": 14,
+  "automaticUpgradePolicy": "Do not enable or change automatic agent upgrades for this demo without an approved ring strategy. Existing settings are reported for review only.",
+  "classification": {
+    "current": "Matches the current production release.",
+    "approvedLag": "Matches the approved standard release, one release behind current.",
+    "aging": "Supported but older than the approved standard release.",
+    "outOfSupport": "Older than the documented minimum supported release.",
+    "exception": "An active, documented exception overrides the version classification until its expiration."
+  }
+}

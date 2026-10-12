@@ -1,0 +1,10 @@
+ConfigurationData
+| where TimeGenerated > ago(30d)
+| where ConfigDataType =~ "Software"
+| summarize LatestInventory = max(TimeGenerated), Entries = count() by
+    Computer,
+    SoftwareName,
+    Publisher,
+    CurrentVersion,
+    SoftwareType
+| order by Computer asc, SoftwareName asc

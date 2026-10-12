@@ -1,0 +1,67 @@
+{
+  "reviewedOn": "2026-09-01",
+  "source": "https://learn.microsoft.com/en-us/azure/virtual-machines/automatic-extension-upgrade",
+  "policy": "Extension versions are inventoried from Azure Resource Manager. Azure does not expose a universal latest-version catalog for every publisher through Resource Graph, so version currency is evaluated against supported automatic-upgrade posture and a periodically reviewed baseline.",
+  "extensionPolicies": [
+    {
+      "publisher": "Microsoft.Azure.Monitor",
+      "type": "AzureMonitorWindowsAgent",
+      "automaticUpgrade": "Required",
+      "purpose": "Core operational telemetry"
+    },
+    {
+      "publisher": "Microsoft.Azure.Monitor",
+      "type": "AzureMonitorLinuxAgent",
+      "automaticUpgrade": "Required",
+      "purpose": "Core operational telemetry"
+    },
+    {
+      "publisher": "Microsoft.Azure.ChangeTrackingAndInventory",
+      "type": "ChangeTracking-Windows",
+      "automaticUpgrade": "Required",
+      "purpose": "Configuration drift and inventory"
+    },
+    {
+      "publisher": "Microsoft.Azure.ChangeTrackingAndInventory",
+      "type": "ChangeTracking-Linux",
+      "automaticUpgrade": "Required",
+      "purpose": "Configuration drift and inventory"
+    },
+    {
+      "publisher": "Microsoft.Azure.AzureDefenderForServers",
+      "type": "MDE.Windows",
+      "automaticUpgrade": "Required",
+      "purpose": "Endpoint protection"
+    },
+    {
+      "publisher": "Microsoft.Azure.AzureDefenderForServers",
+      "type": "MDE.Linux",
+      "automaticUpgrade": "Required",
+      "purpose": "Endpoint protection"
+    },
+    {
+      "publisher": "Microsoft.AdminCenter",
+      "type": "AdminCenter",
+      "automaticUpgrade": "Review",
+      "purpose": "Windows Admin Center gateway; validate certificate and service health before enabling"
+    },
+    {
+      "publisher": "Microsoft.AzureData",
+      "type": "WindowsAgent.SqlServer",
+      "automaticUpgrade": "Review",
+      "purpose": "SQL Arc extension; validate SQL applicability and extension health before enabling"
+    },
+    {
+      "publisher": "Microsoft.SoftwareUpdateManagement",
+      "type": "WindowsOsUpdateExtension",
+      "automaticUpgrade": "Review",
+      "purpose": "Azure Update Manager integration"
+    },
+    {
+      "publisher": "Microsoft.SoftwareUpdateManagement",
+      "type": "LinuxOsUpdateExtension",
+      "automaticUpgrade": "Review",
+      "purpose": "Azure Update Manager integration"
+    }
+  ]
+}

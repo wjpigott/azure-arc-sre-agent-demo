@@ -1,0 +1,12 @@
+resources
+| where type =~ 'microsoft.hybridcompute/machines/applications'
+| project
+    subscriptionId,
+    resourceGroup,
+    location,
+    machineName = tostring(split(id, '/')[8]),
+    applicationName = name,
+    provisioningState = tostring(properties.provisioningState),
+    packageReferenceId = tostring(properties.packageReferenceId),
+    id
+| order by machineName asc, applicationName asc
