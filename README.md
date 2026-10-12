@@ -96,9 +96,11 @@ The default packaging flow assumes that Azure Compute Gallery can reach the
 package storage account through its public network endpoint. **Public network
 access does not mean anonymous blob access.** Keep anonymous container and blob
 access disabled. The recommended authentication model is a user-assigned
-managed identity attached to the Compute Gallery with only the required blob
-data role on the package storage account; do not place account keys or SAS
-tokens in SRE Agent skills, catalogs, prompts, or deployment output.
+managed identity attached to the Compute Gallery with **Storage Blob Data
+Contributor** on the package storage account. Microsoft currently documents
+Contributor—not Storage Blob Data Reader—for publishing VM Applications with a
+managed identity. Do not place account keys or SAS tokens in SRE Agent skills,
+catalogs, prompts, or deployment output.
 
 An existing approved storage account can be reused instead of creating a
 deployment-specific account. Choose and validate one of these network models
@@ -134,11 +136,14 @@ SRE Agent entry point. It reads the reviewed deployment catalog and retrieves:
   group, including storage hosted in another enabled subscription visible to
   the operator.
 - The storage account's public-network and anonymous-blob-access settings.
+- The Gallery managed identity's inherited and direct storage RBAC assignments.
 
 The wrapper fails when a required value is missing, remains a placeholder, or
 resolves ambiguously. It also fails when the Gallery has no user-assigned
 managed identity or package storage permits anonymous blob access. It never
 prints the package URL, SAS tokens, resource IDs, or storage credentials.
+Normal deployment also fails when the Gallery identity lacks **Storage Blob
+Data Contributor** on the package storage account.
 
 Run a complete read-only preflight first:
 
@@ -152,6 +157,22 @@ After reviewing the resolved scope, run the same command without `-WhatIf`.
 The wrapper passes only the catalog-approved values to the lower-level
 assignment script. It discovers and validates existing storage for package
 provenance; it does not create, modify, or delete the storage account.
+
+If the preflight reports that the role is missing, review the target identity
+and storage account, then explicitly approve the one-time RBAC setup:
+
+```powershell
+.\scripts\Start-ArcVmApplicationCanaryDeployment.ps1 `
+  -ApprovalId "CHG-APP-CANARY-YYYYMMDD-NNN" `
+  -AssignStorageBlobDataContributor `
+  -WhatIf
+```
+
+Remove `-WhatIf` only after reviewing the proposed role assignment and
+deployment. The switch creates the role at the storage-account scope; it does
+not grant subscription-wide access. The calling identity must have permission
+to create Azure role assignments. Subsequent deployments should omit the
+switch because the wrapper will validate the existing assignment.
 
 ## Using `sre.azure.com`
 

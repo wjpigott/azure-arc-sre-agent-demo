@@ -34,7 +34,10 @@ In Azure SRE Agent **Builder > Skills**, create a skill named
 4. Add a custom action named `DeployApproved7ZipCanary`. Expose only `approvalId`
    to the agent. It must run `Start-ArcVmApplicationCanaryDeployment.ps1`, which
    reads the reviewed catalog, discovers the Azure and package-storage scope,
-   validates it, and invokes the lower-level assignment implementation.
+   verifies the Gallery managed identity has `Storage Blob Data Contributor`,
+   and invokes the lower-level assignment implementation. Do not expose
+   `AssignStorageBlobDataContributor` to the agent; RBAC setup is a separate
+   operator-approved action.
 5. Scope that action to the exact `<canary-machine>` VM Application assignment; do
    not enable a general Azure CLI write tool, Run Command, Automation job
    action, or notification action.
@@ -63,6 +66,19 @@ After review, run the same command without `-WhatIf`. The script resolves the
 required resources from the reviewed catalog within the active Azure scope and
 fails if a logical target is missing or ambiguous. The agent cannot select an
 arbitrary machine, Gallery, application, package source, or version.
+
+If package-storage RBAC is missing, an authorized operator can preview and
+perform the one-time storage-account-scoped assignment:
+
+```powershell
+.\scripts\Start-ArcVmApplicationCanaryDeployment.ps1 `
+  -ApprovalId "CHG-7ZIP-2603-CANARY-001" `
+  -AssignStorageBlobDataContributor `
+  -WhatIf
+```
+
+Microsoft's VM Application publishing guidance specifies `Storage Blob Data
+Contributor`; `Storage Blob Data Reader` is not used by this workflow.
 
 ## Verify after deployment
 

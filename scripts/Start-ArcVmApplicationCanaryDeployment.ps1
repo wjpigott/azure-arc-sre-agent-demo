@@ -13,6 +13,9 @@ param(
     [string]$Ring = "Canary",
 
     [Parameter()]
+    [switch]$AssignStorageBlobDataContributor,
+
+    [Parameter()]
     [ValidateNotNullOrEmpty()]
     [string]$CatalogPath = (Join-Path $PSScriptRoot "..\config\arc-vm-application-deployment-catalog.json")
 )
@@ -157,9 +160,17 @@ $galleryDetails = az rest --method get --url "https://management.azure.com$($gal
 if ($LASTEXITCODE -ne 0) {
     throw "Unable to read Compute Gallery '$galleryName'."
 }
-$galleryIdentityCount = @($galleryDetails.identity.userAssignedIdentities.PSObject.Properties).Count
-if ($galleryIdentityCount -eq 0) {
-    throw "Compute Gallery '$galleryName' must have a user-assigned managed identity before package storage can be validated."
+$galleryIdentities = @($galleryDetails.identity.userAssignedIdentities.PSObject.Properties)
+if ($galleryIdentities.Count -ne 1) {
+    throw "Compute Gallery '$galleryName' must have exactly one user-assigned managed identity; found $($galleryIdentities.Count)."
+}
+$galleryIdentity = $galleryIdentities[0]
+$galleryIdentityPrincipalId = [string]$galleryIdentity.Value.principalId
+if ([string]::IsNullOrWhiteSpace($galleryIdentityPrincipalId)) {
+    $galleryIdentityPrincipalId = [string](az identity show --ids $galleryIdentity.Name --query principalId --output tsv)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($galleryIdentityPrincipalId)) {
+        throw "Unable to resolve the Compute Gallery managed identity principal."
+    }
 }
 
 $targetVersionQuery = @"
@@ -226,6 +237,42 @@ if ($storageDetails.properties.allowBlobPublicAccess -eq $true) {
     throw "Package storage account '$($storage.name)' allows anonymous blob access. Disable it before deployment."
 }
 
+$requiredStorageRole = "Storage Blob Data Contributor"
+$storageRoleAssignments = @(
+    az role assignment list `
+        --assignee-object-id $galleryIdentityPrincipalId `
+        --scope $storage.id `
+        --include-inherited `
+        --output json |
+        ConvertFrom-Json
+)
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to validate the Compute Gallery managed identity's package storage role."
+}
+$hasRequiredStorageRole = @(
+    $storageRoleAssignments |
+        Where-Object { $_.roleDefinitionName -eq $requiredStorageRole }
+).Count -gt 0
+
+if (-not $hasRequiredStorageRole) {
+    if (-not $AssignStorageBlobDataContributor) {
+        throw "Compute Gallery '$galleryName' does not have '$requiredStorageRole' on package storage '$($storage.name)'. Rerun with -AssignStorageBlobDataContributor after approving the RBAC change."
+    }
+
+    if ($PSCmdlet.ShouldProcess($storage.name, "Assign $requiredStorageRole to the Compute Gallery managed identity")) {
+        az role assignment create `
+            --assignee-object-id $galleryIdentityPrincipalId `
+            --assignee-principal-type ServicePrincipal `
+            --role $requiredStorageRole `
+            --scope $storage.id `
+            --output none
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to assign '$requiredStorageRole' on package storage '$($storage.name)'."
+        }
+        $hasRequiredStorageRole = $true
+    }
+}
+
 $storageNetworkAccess = [string]$storageDetails.properties.publicNetworkAccess
 if ([string]::IsNullOrWhiteSpace($storageNetworkAccess)) {
     $storageNetworkAccess = "Enabled"
@@ -246,6 +293,7 @@ Write-Host "  Storage subscription: $($storageSubscription.name)"
 Write-Host "  Storage resource group: $($storage.resourceGroup)"
 Write-Host "  Storage public network access: $storageNetworkAccess"
 Write-Host "  Anonymous blob access: Disabled"
+Write-Host "  Gallery storage role: $(if ($hasRequiredStorageRole) { $requiredStorageRole } else { "$requiredStorageRole (assignment proposed)" })"
 
 $deploymentScript = Join-Path $PSScriptRoot "Invoke-ArcVmApplicationCanaryDeployment.ps1"
 if (-not (Test-Path -LiteralPath $deploymentScript -PathType Leaf)) {
