@@ -65,6 +65,11 @@ Set it to run daily, select **Review** mode, and have results remain in the agen
 
 ## Post-deployment validation
 
+Create or reconcile the selected software tracker and Arc priority/lifecycle
+reports using [live-report-bootstrap.md](live-report-bootstrap.md).
+The authoring catalog and prompts do not create saved reports automatically;
+validate source access and save the generated IDs privately after authoring.
+
 Ask the agent:
 
 ```text

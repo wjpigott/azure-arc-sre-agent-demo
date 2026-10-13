@@ -5,6 +5,9 @@ This catalog maps the customer's four strategic themes to concrete, safe demonst
 ## Live Report artifact
 
 Use the saved `Arc Fleet Operations` Live Report as the live customer demo surface. Record its generated ID outside this public repository; downloaded HTML is a portable snapshot rather than its live data source.
+For new deployments, use the selected software tracker and Arc priority/lifecycle
+[blueprints](live-report-bootstrap.md). Existing demos can retain their current
+report; the new templates do not rename it or create reports automatically.
 
 ## 01 - Platform Health
 

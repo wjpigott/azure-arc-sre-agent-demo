@@ -141,6 +141,7 @@ See [docs/on-prem-operations-scenarios.md](docs/on-prem-operations-scenarios.md)
 See [docs/third-party-software-inventory.md](docs/third-party-software-inventory.md) for software inventory scope, SRE Agent prompt, and collection boundaries.
 See [docs/third-party-software-live-report.md](docs/third-party-software-live-report.md) for the reusable software-lifecycle Live Report prompt and version-baseline process.
 See [docs/software-live-report-template.md](docs/software-live-report-template.md) for a sanitized pattern that can be reused in another SRE Agent environment.
+See [docs/live-report-bootstrap.md](docs/live-report-bootstrap.md) for the two selected report blueprints and new-deployment authoring steps.
 See [docs/software-remediation-staging.md](docs/software-remediation-staging.md) for the approval-gated package-staging and notification workflow.
 See [docs/arc-vm-applications-deployment.md](docs/arc-vm-applications-deployment.md) for the preferred Azure Arc VM Applications deployment path.
 See [docs/7zip-vm-application-canary.md](docs/7zip-vm-application-canary.md) for the one-machine, approval-gated 7-Zip canary assessment and deployment.
@@ -581,9 +582,41 @@ and [Manage permissions for Azure SRE Agent](https://learn.microsoft.com/azure/s
 
 Deploy `<sre-agent-name>` in `<sre-agent-resource-group>`. Give it a Log Analytics connector for `<log-analytics-workspace>` and read access to the intended Arc scope.
 
-After creating the `Arc Fleet Operations` Live Report, record its generated ID outside this public repository. The live report refreshes through its approved Azure resource and Log Analytics tools; downloaded HTML is a portable point-in-time artifact and should be reviewed for environment identifiers before sharing.
+### Selected reports for new deployments
 
-Use `Arc Fleet Operations` for the canonical report. For deployment validation, create a separate report named `Arc Fleet Operations - DEV - <deployment-id>` or `Arc Fleet Operations - TEST - <deployment-id>` so each run is distinguishable and does not overwrite the canonical report.
+Include these report patterns in post-deployment setup:
+
+| Report | Reusable authoring blueprint |
+| --- | --- |
+| Third-Party Software Update Tracker | [Software report prompt](reports/third-party-software-update-tracker.prompt.txt): summary cards, priority updates, searchable inventory, per-machine chart, version references |
+| Arc Priority & Lifecycle | [Fleet report prompt](reports/arc-priority-lifecycle.prompt.txt): priority queue, patch/maintenance readiness, lifecycle, capacity, reliability/configuration |
+
+[config/live-report-catalog.json](config/live-report-catalog.json) records scope
+bindings, read connectors, policy sources, thresholds and validation checks.
+Follow the [bootstrap guide](docs/live-report-bootstrap.md) to resolve private
+environment settings, create/reconcile the reports through `sre.azure.com`,
+and save report IDs outside this public repository.
+
+**These are authoring blueprints, not automatically deployed reports.** The
+selected HTML exports contain static data, not live queries or connector code;
+the raw exports are intentionally not committed. Creation still uses the
+supported Live Reports authoring flow until a supported automation mechanism
+is implemented and validated. The deployment scripts do not create reports.
+
+Preserve the layouts while correcting the snapshot rules: newer-than-approved
+software is `AheadOfPolicy`, missing baselines are `NeedsReview`, and source
+freshness is separate from page refresh time. Do not use a snapshot's vendor
+version, machine inventory or fleet counts as deployment defaults.
+
+After creating each report, record its generated ID outside this public
+repository. The live report refreshes through its approved Azure resource and
+Log Analytics tools; downloaded HTML is a portable point-in-time artifact and
+should be reviewed for environment identifiers before sharing.
+
+For new deployments, use the selected catalog display names for canonical
+reports and append `- DEV - <deployment-id>` or `- TEST - <deployment-id>` for
+validation. Existing demos can retain their `Arc Fleet Operations` report;
+do not silently rename or overwrite it.
 
 The following providers were registered before deployment:
 
@@ -641,7 +674,9 @@ exceptions. Group findings into 30, 60, and 90 day actions. Do not make changes.
 
 ### Live Report prompt
 
-Use this prompt to create the reusable dashboard:
+This general-purpose `Arc Fleet Operations` prompt is an alternative to the
+selected `Arc Priority & Lifecycle` blueprint. The selected two-report setup
+does not require creating a third fleet dashboard:
 
 ```text
 Create a Live Report named "Arc Fleet Operations" for my Azure Arc lab.
@@ -701,7 +736,7 @@ Keep the agent read-only and in **Review** mode initially. Do not grant arbitrar
 
 ## Next steps
 
-1. Create or verify the `Arc Fleet Operations` Live Report and validate each section against the initial fleet-health investigation. Use the documented DEV or TEST suffix for deployment-validation reports.
+1. Create or reconcile the two selected reports using [the bootstrap guide](docs/live-report-bootstrap.md), then validate each section against its source data. Existing demos may retain the alternative `Arc Fleet Operations` report. Use the documented DEV or TEST suffix for deployment-validation reports.
 2. Create the first scheduled task: `Arc Fleet Daily Health`, retaining results in the agent portal during the validation period.
 3. Add the approved Arc agent version baseline, deployment rings, support horizon, and exception registry to this repository.
 4. Add an Azure Monitor health model and alert that opens a read-only agent investigation for fleet degradation.

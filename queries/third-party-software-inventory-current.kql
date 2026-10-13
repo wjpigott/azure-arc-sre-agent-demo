@@ -1,0 +1,16 @@
+// Log Analytics KQL. Bind TargetMachines to approved inventory Computer values.
+// This is inventory only; apply reviewed baselines and freshness in the report.
+let InventoryLookback = 30d;
+let TargetMachines = dynamic(["<inventory-computer-name>"]);
+ConfigurationData
+| where TimeGenerated > ago(InventoryLookback)
+| where ConfigDataType =~ "Software"
+| where Computer in~ (TargetMachines)
+| where Publisher !has "Microsoft"
+| where SoftwareName !has "Update for" and SoftwareName !has "Security Update"
+    and SoftwareName !has "Hotfix for" and SoftwareName !has "Definition Update"
+| summarize arg_max(TimeGenerated, *) by Computer, SoftwareName, Publisher, SoftwareType
+| project Computer, SoftwareName, Publisher, InstalledVersion = CurrentVersion,
+    SoftwareType, InventoryTime = TimeGenerated,
+    ResourceId = tostring(column_ifexists("_ResourceId", ""))
+| order by SoftwareName asc, Computer asc

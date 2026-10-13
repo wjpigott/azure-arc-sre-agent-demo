@@ -16,11 +16,18 @@ The reusable artifacts are maintained here:
 | --- | --- |
 | `queries/third-party-software-live-report-v1.kql` | Exact query captured from the initial Azure SRE Agent Live Report. |
 | `queries/third-party-software-lifecycle.kql` | Reusable inventory query for Acrobat, 7-Zip, Python, Java 8, Chrome, and Node.js. |
+| `queries/third-party-software-inventory-current.kql` | Scoped full inventory for the selected tracker, with latest observations and no embedded version approvals. |
+| `reports/third-party-software-update-tracker.prompt.txt` | Selected tracker layout and safe classification/refresh requirements. |
+| `config/live-report-catalog.json` | Software and Arc priority/lifecycle authoring blueprints; not a deployment API payload. |
 | `config/third-party-software-baseline.json` | Human-reviewed target versions and official vendor release-note sources. |
 | `docs/third-party-software-inventory.md` | Inventory collection scope and limitations. |
 
 If SRE Agent exposes the Live Report's generated query/configuration later, compare it with these artifacts and capture any useful refinements in the repository.
 The copied HTML from the initial report confirms the Monitor Workspace Log Query contract and is distilled into [software-live-report-template.md](software-live-report-template.md) for reuse without lab-specific identifiers.
+The selected newer HTML snapshot has no executable query or connector code.
+Use the [bootstrap guide](live-report-bootstrap.md) and selected tracker prompt
+to author that layout with current, approved data; do not publish or import
+the raw inventory snapshot as a live report.
 
 ## Live Report prompt
 

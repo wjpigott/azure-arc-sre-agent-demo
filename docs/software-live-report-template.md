@@ -9,7 +9,19 @@ The generated `Third-Party Software Update Tracker` is a valid Azure SRE Agent L
 3. Compare recognized software against a curated version reference.
 4. Present a priority queue, searchable inventory, per-machine concentration, and reference-version transparency.
 
-The generic report implementation needs only a Log Analytics connector and read permission to the target workspace. It does not need direct access to guest machines.
+Reading software data needs a Log Analytics connector and read permission to the
+target workspace. Creating or updating the report also requires authoring
+permissions on the agent. Neither operation needs direct access to guest machines.
+
+## Selected software tracker blueprint
+
+The selected newer export preserves the summary cards, priority updates,
+full inventory, per-machine chart and version-reference sections, but contains
+no scripts, live queries or connector calls. It cannot be imported as a live
+definition. Use the [authoring prompt](../reports/third-party-software-update-tracker.prompt.txt)
+and [bootstrap guide](live-report-bootstrap.md) to reconstruct and validate
+the view in a new agent. The [catalog](../config/live-report-catalog.json)
+also includes the selected Arc Priority & Lifecycle report.
 
 ## Connector contract
 
@@ -40,6 +52,11 @@ ConfigurationData
 ```
 
 The repository's curated alternative is [third-party-software-lifecycle.kql](../queries/third-party-software-lifecycle.kql). It limits output to products selected for lifecycle reporting.
+For the selected full-inventory tracker, use
+[third-party-software-inventory-current.kql](../queries/third-party-software-inventory-current.kql)
+with the approved `Computer` list. It retains untracked products and chooses
+the latest observation per machine/software/publisher/type rather than
+classifying against the captured query's embedded versions.
 
 ## Captured query limitations
 
