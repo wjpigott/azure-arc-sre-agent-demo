@@ -260,6 +260,42 @@ Also complete the immutable source, SHA-256, signer evidence, package file
 name, install/remove commands, rollback version, target region, and pilot
 machine before changing the staging status.
 
+#### Chrome Enterprise MSI pilot
+
+Use a **Chrome Enterprise standalone x64 MSI** for a machine-wide installation
+on supported 64-bit Windows targets. The earlier EXE pilot started processes
+but did not fully install Chrome; process launch or a successful Gallery
+publication is not proof of installation.
+
+Package the approved MSI with
+[`Install-ChromeEnterpriseMsi.ps1`](scripts/Install-ChromeEnterpriseMsi.ps1)
+and a reviewed, pinned copy of
+[`Install-ChromeMsiPackage.example.ps1`](scripts/Install-ChromeMsiPackage.example.ps1).
+The helper verifies the MSI SHA-256 and exact Authenticode signer, waits for
+`msiexec`, writes a verbose log, and requires both machine-wide HKLM
+registration and the expected Program Files executable version. It refuses
+downgrades and treats reboot-required or unverifiable outcomes as incomplete,
+not successful.
+
+Reuse the existing `chromewin` Gallery application, but publish a **new**
+three-part version for the MSI ZIP. Keep the failed EXE version intact for
+investigation; do not treat it as a working rollback. A no-op remove command
+such as `cmd /c exit 0` is not an uninstall or rollback implementation.
+
+Assignments now use `treatFailureAsDeploymentFailure = true`. Complete the
+blocked Chrome catalog entry, review the MSI ProductCode/removal behavior, and
+validate the pilot with multiple non-administrator users before any broader
+rollout. Existing per-user Chrome copies, browser profiles, and update policies
+require separate review; the installer does not delete user data.
+
+See the
+[MSI packaging and validation steps](docs/arc-vm-applications-deployment.md#chrome-enterprise-msi-machine-wide-deployment).
+Run the dependency-free mocked checks without installing Chrome:
+
+```powershell
+.\tests\Test-ChromeEnterpriseMsi.ps1
+```
+
 ## Using `sre.azure.com`
 
 This solution is intended to be operated through

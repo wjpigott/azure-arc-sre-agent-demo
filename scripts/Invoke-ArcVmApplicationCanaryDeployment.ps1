@@ -114,7 +114,7 @@ $body = @{
     properties = @{
         packageReferenceId = $targetGalleryVersion.id
         order = 0
-        treatFailureAsDeploymentFailure = $false
+        treatFailureAsDeploymentFailure = $true
     }
 } | ConvertTo-Json -Compress
 if ($PSCmdlet.ShouldProcess("$MachineName/$ApplicationName", "Assign Gallery version $TargetVersion (approval $ApprovalId)")) {

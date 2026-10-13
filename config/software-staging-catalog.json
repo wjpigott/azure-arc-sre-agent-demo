@@ -1,5 +1,5 @@
 {
-  "reviewedOn": "2026-10-12",
+  "reviewedOn": "2026-10-13",
   "policy": "Entries must use a vendor-authoritative HTTPS source and a vendor-published SHA-256 value. Do not stage a product until its version, source URL, checksum, support channel, and approval status are verified.",
   "packages": [
     {
@@ -9,14 +9,20 @@
       "galleryVersion": null,
       "sourceUrl": null,
       "sha256": null,
-      "packageFileName": null,
+      "packageFileName": "chrome-enterprise-msi.zip",
+      "installerType": "MSI",
+      "installationScope": "Machine",
+      "installerFileName": "GoogleChromeStandaloneEnterprise64.msi",
+      "installerSha256": null,
+      "installerExpectedSignerSubject": null,
+      "installationVerification": "Expected executable version in Program Files and matching HKLM uninstall registration; process launch is not success.",
       "blobType": "BlockBlob",
       "artifactVerificationMethod": null,
       "expectedSignerSubject": null,
       "installCommand": null,
       "removeCommand": null,
       "stagingStatus": "BlockedPendingApprovalEvidence",
-      "stagingBlocker": "Record an approved four-part Chrome vendor version, a unique three-part Gallery version, an immutable authorized package source, SHA-256, signer evidence, exact package file name, reviewed install/remove commands, and change approval before publishing."
+      "stagingBlocker": "Approve the Chrome Enterprise x64 MSI vendor version, unique Gallery version, immutable authorized source, MSI hash/signer, ZIP hash, reviewed commands, rollback and pilot scope. Package the MSI, Install-ChromeEnterpriseMsi.ps1, and a reviewed pinned launch script together; do not reuse the failed EXE package."
     }
   ]
 }

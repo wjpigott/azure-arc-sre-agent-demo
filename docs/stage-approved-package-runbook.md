@@ -111,6 +111,13 @@ changing `stagingStatus`:
 - Exact package file name.
 - Reviewed install and remove commands.
 
+Chrome now uses the machine-wide Enterprise MSI, not the failed EXE pilot
+recipe. Package the MSI with the synchronous installer helper and pinned
+launcher as described in
+[Chrome Enterprise MSI deployment](arc-vm-applications-deployment.md#chrome-enterprise-msi-machine-wide-deployment).
+Approve both the original MSI hash/signature and the final ZIP hash. Do not
+mark the package staged or deployed solely because an installer process starts.
+
 The template specifies `BlockBlob`. Do not change it to `PageBlob` solely
 because Gallery version creation failed. VM Application packages support block
 blobs, and installer publication failures are more commonly caused by version

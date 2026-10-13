@@ -136,15 +136,92 @@ Chrome installer. Diagnose version format, package URL, Gallery managed
 identity, `Storage Blob Data Contributor`, storage networking, and command
 quoting before changing blob type.
 
-If the tested package file is `chrome_installer_uncompressed.exe`, the reported
-silent command is:
+### Chrome Enterprise MSI: machine-wide deployment
+
+The EXE pilot started processes but did not establish a verified installation.
+Do not reuse `chrome_installer_uncompressed.exe /silent /install` as the
+deployment recipe. Use Google's **Chrome Enterprise standalone x64 MSI** for
+64-bit Windows, running as SYSTEM or an elevated administrator. Google documents
+the MSI as a system-level installation in Program Files, available to users of
+the machine. This does not configure every user's browser profile or prove that
+existing per-user installations have been reconciled.
+
+Obtain the MSI from the
+[Chrome Enterprise download site](https://chromeenterprise.google/download/)
+under the applicable license. The download can change over time: capture and
+approve the exact artifact version, SHA-256, and valid Google Authenticode
+signer, then retain that reviewed artifact in immutable package storage. Do not
+invent a version-pinned URL or use a rolling download during installation.
+
+Package these three files in one ZIP:
+
+1. `GoogleChromeStandaloneEnterprise64.msi`: the approved MSI.
+2. `Install-ChromeEnterpriseMsi.ps1`: the repository installer helper.
+3. `Install-Chrome.ps1`: a reviewed copy of
+   `scripts/Install-ChromeMsiPackage.example.ps1`, with its version, MSI hash,
+   and exact signer placeholders replaced.
+
+Record the MSI hash in `installerSha256` and the ZIP hash in `sha256` in the
+staging catalog. These are different artifacts with different hashes. The
+`packages` staging catalog is a planning manifest, not the `products` catalog
+consumed by the legacy staging runbook.
+
+For the new Gallery version, set the package download filename to
+`chrome-enterprise-msi.zip`. Configure this install command (Windows `cmd.exe`):
 
 ```text
-chrome_installer_uncompressed.exe /silent /install
+tar.exe -xf chrome-enterprise-msi.zip && powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\Install-Chrome.ps1
 ```
 
-Validate that exact file name and command against the approved artifact before
-publishing; do not copy it into an active catalog entry automatically.
+This requires `tar.exe` on the target; validate that prerequisite during the
+pilot. Use the same reviewed command for the Gallery update action if that
+action is configured. `ExecutionPolicy Bypass` affects this process only and
+is not a substitute for package review or signature/hash validation.
+
+The helper runs:
+
+```text
+msiexec.exe /i "<approved-msi>" /qn /norestart ALLUSERS=1 REBOOT=ReallySuppress /L*v "<local-log>"
+```
+
+It waits for Windows Installer to exit, refuses a downgrade, and verifies the
+expected full vendor version in both a Program Files `chrome.exe` and HKLM
+uninstall registration. Merely finding a process, an EXE, or an assignment
+marked `Succeeded` is not installation proof.
+
+| Result | Handling |
+| --- | --- |
+| `0` plus matching machine-wide registration and executable | `InstalledVerified` |
+| Expected version already verified | `AlreadyInstalledVerified`; no reinstall |
+| `0` without matching installation evidence | Fail; retain the MSI log |
+| `3010` | Fail pending separately approved reboot and revalidation; never report installation complete |
+| Other nonzero code, including `1603`, `1618`, or `1641` | Fail; no automatic retry, uninstall, or reboot |
+
+Verbose MSI logs are retained under
+`%ProgramData%\SrePackageDeployment\Logs`. Treat them as operational evidence
+and review them before sharing. Assignments set
+`treatFailureAsDeploymentFailure = true` so installer failures surface as
+deployment failures.
+
+Create a **new three-part Gallery version** for the MSI package; do not mutate
+the failed EXE version in place. Keep the four-part vendor version in the
+catalog. Review the actual current assignment before using the deployment
+wrapper: it still requires that assignment to match the approved rollback
+version, and it does not automatically repair a failed assignment or create a
+new one.
+
+Do not invent a remove command or use an EXE uninstall string for this MSI.
+Record and approve the MSI's actual ProductCode and uninstall/rollback behavior
+separately before publishing. User-profile data must not be deleted.
+A remove command such as `cmd /c exit 0` performs no removal and must not be
+counted as rollback evidence. A Gallery version in `Succeeded` state proves
+publication, not that Chrome installed on an Arc machine.
+
+After the pilot, confirm Chrome launches under at least two representative
+non-administrator user accounts, check `chrome://policy`, and wait for fresh
+Change Tracking inventory. Existing browser/update policies or per-user copies
+may need a separate reviewed migration. See
+[Google's Windows MSI deployment guidance](https://support.google.com/chrome/a/answer/7650247).
 
 ## Monitor VM Applications
 
