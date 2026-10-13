@@ -281,6 +281,13 @@ Reuse the existing `chromewin` Gallery application, but publish a **new**
 three-part version for the MSI ZIP. Keep the failed EXE version intact for
 investigation; do not treat it as a working rollback. A no-op remove command
 such as `cmd /c exit 0` is not an uninstall or rollback implementation.
+The MSI helper also supports `-Uninstall -ProductCode "<approved-guid-in-braces>"
+-ExpectedVersion "<approved-four-part-version>"`. It verifies the exact
+registration before removal and checks absence afterward, without deleting user
+profiles or inventory. This is recovery to an absent installation, not a
+Chrome downgrade; pilot-test removal before calling recovery verified.
+Keep a candidate returned by a rolling vendor download excluded from Gallery
+latest-version selection, and approve its exact version before assignment.
 
 Assignments now use `treatFailureAsDeploymentFailure = true`. Complete the
 blocked Chrome catalog entry, review the MSI ProductCode/removal behavior, and
@@ -294,6 +301,7 @@ Run the dependency-free mocked checks without installing Chrome:
 
 ```powershell
 .\tests\Test-ChromeEnterpriseMsi.ps1
+.\tests\Test-ArcVmApplicationStorageRole.ps1
 ```
 
 ## Using `sre.azure.com`

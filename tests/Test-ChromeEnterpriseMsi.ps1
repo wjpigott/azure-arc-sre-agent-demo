@@ -21,10 +21,16 @@ function Get-MachineChromeState {
 function Start-Process {
     param($FilePath, $ArgumentList, [switch]$Wait, [switch]$PassThru)
     $script:Starts++
-    if (-not $Wait -or -not $PassThru -or $ArgumentList -notmatch "ALLUSERS=1" -or
+    if (-not $Wait -or -not $PassThru -or
         $ArgumentList -notmatch "/qn /norestart" -or $ArgumentList -notmatch '/L\*v "' -or
-        $FilePath -notmatch "msiexec.exe$") {
-        throw "Installer must run synchronously, machine-wide, silently, without reboot, with logging."
+        $ArgumentList -notmatch "REBOOT=ReallySuppress" -or $FilePath -notmatch "msiexec.exe$") {
+        throw "Installer must run synchronously, silently, without reboot, with logging."
+    }
+    if ($script:Operation -eq "Install" -and $ArgumentList -notmatch "ALLUSERS=1") {
+        throw "Installation must be machine-wide."
+    }
+    if ($script:Operation -eq "Uninstall" -and $ArgumentList -notmatch ("^/x " + [regex]::Escape($script:TestProductCode) + " ")) {
+        throw "Removal must target the exact approved MSI ProductCode."
     }
     return [pscustomobject]@{ ExitCode = $script:InstallerExitCode }
 }
@@ -33,10 +39,12 @@ function New-TestState {
     $files = @()
     $registrations = @()
     if ($FileVersion) { $files = @([pscustomobject]@{ Version = $FileVersion }) }
-    if ($RegistrationVersion) { $registrations = @([pscustomobject]@{ Version = $RegistrationVersion }) }
+    if ($RegistrationVersion) {     $registrations = @([pscustomobject]@{ Version = $RegistrationVersion; ProductCode = $script:TestProductCode }) }
     return [pscustomobject]@{ Files = $files; Registrations = $registrations }
 }
 function Reset-Test {
+    $script:Operation = "Install"
+    $script:TestProductCode = "{11111111-2222-3333-4444-555555555555}"
     $script:ActualHash = "A" * 64
     $script:ActualSigner = "CN=Approved Google Signer"
     $script:SignatureStatus = "Valid"
@@ -100,4 +108,65 @@ Assert-Rejected "returned 0"
 Reset-Test
 $script:After = New-TestState "143.0.1.1" "143.0.1.1"
 Assert-Rejected "returned 0"
-Write-Output "Passed 14 Chrome MSI tests; no installer or Azure command was executed."
+
+function Invoke-TestUninstall {
+    $script:Operation = "Uninstall"
+    Invoke-ChromeEnterpriseMsiUninstall -Code $script:TestProductCode -Version "144.0.7559.133"
+}
+function Assert-RemovalRejected {
+    param([string]$Pattern)
+    $caught = $false
+    try { Invoke-TestUninstall | Out-Null }
+    catch {
+        if ($_.Exception.Message -notmatch $Pattern) { throw }
+        $caught = $true
+    }
+    if (-not $caught) { throw "Expected removal failure matching '$Pattern'." }
+}
+Reset-Test
+if ((Invoke-TestUninstall).Status -ne "AlreadyAbsentVerified" -or $script:Starts -ne 0) {
+    throw "Absent Chrome must not run an uninstall."
+}
+Reset-Test
+$script:Before = $script:After
+$script:After = New-TestState
+if ((Invoke-TestUninstall).Status -ne "RemovedVerified" -or $script:Starts -ne 1) {
+    throw "Successful removal was not verified."
+}
+Reset-Test
+$script:Before = New-TestState "144.0.7559.133"
+Assert-RemovalRejected "not registered"
+if ($script:Starts -ne 0) { throw "Unregistered Chrome must not be removed." }
+Reset-Test
+$script:Before = $script:After
+$script:Before.Registrations[0].ProductCode = "{99999999-2222-3333-4444-555555555555}"
+Assert-RemovalRejected "not registered"
+if ($script:Starts -ne 0) { throw "Different ProductCode must not be removed." }
+Reset-Test
+$script:Before = New-TestState "155.0.1.1" "144.0.7559.133"
+Assert-RemovalRejected "different Chrome version"
+if ($script:Starts -ne 0) { throw "Different Chrome version must not be removed." }
+foreach ($code in @(1603, 1605, 1618, 1641)) {
+    Reset-Test
+    $script:Before = $script:After
+    $script:InstallerExitCode = $code
+    Assert-RemovalRejected "exit code $code"
+}
+Reset-Test
+$script:Before = $script:After
+$script:InstallerExitCode = 3010
+Assert-RemovalRejected "requires a reboot"
+foreach ($remaining in @(
+    (New-TestState "144.0.7559.133"),
+    (New-TestState "" "144.0.7559.133")
+)) {
+    Reset-Test
+    $script:Before = $script:After
+    $script:After = $remaining
+    Assert-RemovalRejected "returned 0"
+}
+Reset-Test
+$script:TestProductCode = "not-a-product-code"
+Assert-RemovalRejected "approved MSI ProductCode"
+if ($script:Starts -ne 0) { throw "Invalid ProductCode must not start msiexec." }
+Write-Output "Passed 27 Chrome MSI install/removal tests; no installer or Azure command was executed."

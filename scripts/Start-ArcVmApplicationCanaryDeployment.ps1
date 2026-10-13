@@ -240,7 +240,7 @@ if ($storageDetails.properties.allowBlobPublicAccess -eq $true) {
 $requiredStorageRole = "Storage Blob Data Contributor"
 $storageRoleAssignments = @(
     az role assignment list `
-        --assignee-object-id $galleryIdentityPrincipalId `
+        --subscription $storage.subscriptionId `
         --scope $storage.id `
         --include-inherited `
         --output json |
@@ -251,7 +251,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 $hasRequiredStorageRole = @(
     $storageRoleAssignments |
-        Where-Object { $_.roleDefinitionName -eq $requiredStorageRole }
+        Where-Object {
+            $_.principalId -eq $galleryIdentityPrincipalId -and
+            $_.roleDefinitionName -eq $requiredStorageRole
+        }
 ).Count -gt 0
 
 if (-not $hasRequiredStorageRole) {
@@ -261,6 +264,7 @@ if (-not $hasRequiredStorageRole) {
 
     if ($PSCmdlet.ShouldProcess($storage.name, "Assign $requiredStorageRole to the Compute Gallery managed identity")) {
         az role assignment create `
+            --subscription $storage.subscriptionId `
             --assignee-object-id $galleryIdentityPrincipalId `
             --assignee-principal-type ServicePrincipal `
             --role $requiredStorageRole `

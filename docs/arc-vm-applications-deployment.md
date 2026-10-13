@@ -213,6 +213,31 @@ new one.
 Do not invent a remove command or use an EXE uninstall string for this MSI.
 Record and approve the MSI's actual ProductCode and uninstall/rollback behavior
 separately before publishing. User-profile data must not be deleted.
+The same helper supports guarded MSI removal:
+
+```powershell
+.\Install-ChromeEnterpriseMsi.ps1 -Uninstall `
+    -ProductCode "<approved-msi-product-code-in-braces>" `
+    -ExpectedVersion "<approved-four-part-chrome-version>"
+```
+
+For the Gallery remove action, extract the package first, then invoke this
+command with `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+-File .\Install-ChromeEnterpriseMsi.ps1` and the reviewed parameters.
+Removal requires the exact ProductCode and version in HKLM; a different version
+or unregistered executable blocks automatic removal. The helper waits for
+`msiexec /x`, suppresses automatic reboot, logs the result, and verifies that
+machine-wide Chrome files and registrations are absent. If already absent,
+it returns `AlreadyAbsentVerified` without running MSI. It never deletes
+browser profiles, per-user installs, registry entries, or inventory records.
+
+Removing this MSI is recovery to an absent machine-wide installation, **not a
+downgrade or a verified rollback to the failed EXE**. Validate the removal action
+on the pilot before calling recovery tested. If a rolling vendor download now
+returns a different version than the original pilot, record it as a candidate
+and obtain target-version approval before assignment. Publish candidate Gallery
+versions with `excludeFromLatest = true` and use explicit version references.
+
 A remove command such as `cmd /c exit 0` performs no removal and must not be
 counted as rollback evidence. A Gallery version in `Succeeded` state proves
 publication, not that Chrome installed on an Arc machine.

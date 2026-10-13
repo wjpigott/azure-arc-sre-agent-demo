@@ -1,6 +1,6 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = "Install")]
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = "Install")]
     [ValidateNotNullOrEmpty()]
     [string]$MsiPath,
 
@@ -8,13 +8,20 @@ param(
     [ValidatePattern("^\d+\.\d+\.\d+\.\d+$")]
     [string]$ExpectedVersion,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = "Install")]
     [ValidatePattern("^[A-Fa-f0-9]{64}$")]
     [string]$ExpectedSha256,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = "Install")]
     [ValidateNotNullOrEmpty()]
-    [string]$ExpectedSignerSubject
+    [string]$ExpectedSignerSubject,
+
+    [Parameter(Mandatory = $true, ParameterSetName = "Uninstall")]
+    [switch]$Uninstall,
+
+    [Parameter(Mandatory = $true, ParameterSetName = "Uninstall")]
+    [ValidatePattern("^\{[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}\}$")]
+    [string]$ProductCode
 )
 
 $ErrorActionPreference = "Stop"
@@ -158,5 +165,59 @@ function Invoke-ChromeEnterpriseMsiInstall {
     }
 }
 
-Invoke-ChromeEnterpriseMsiInstall -PackagePath $MsiPath -Version $ExpectedVersion -Sha256 $ExpectedSha256 -SignerSubject $ExpectedSignerSubject |
-    ConvertTo-Json
+function Invoke-ChromeEnterpriseMsiUninstall {
+    param([string]$Code, [string]$Version)
+
+    Assert-ChromeInstallerAdministrator
+    if ($Code -notmatch "^\{[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}\}$" -or
+        $Version -notmatch "^\d+\.\d+\.\d+\.\d+$") {
+        throw "Removal requires an approved MSI ProductCode and four-part Chrome version."
+    }
+    $before = Get-MachineChromeState
+    if (@($before.Files).Count -eq 0 -and @($before.Registrations).Count -eq 0) {
+        return [pscustomobject]@{ Status = "AlreadyAbsentVerified"; RebootRequired = $false }
+    }
+    $matchingRegistration = @(
+        $before.Registrations |
+            Where-Object { $_.ProductCode -eq $Code -and $_.Version -eq $Version }
+    )
+    if ($matchingRegistration.Count -eq 0) {
+        throw "The approved Chrome MSI ProductCode/version is not registered. Manual recovery review is required."
+    }
+    foreach ($installed in @($before.Files) + @($before.Registrations)) {
+        if ($installed.Version -ne $Version) {
+            throw "A different Chrome version is present. Automatic removal is prohibited."
+        }
+    }
+
+    $logDirectory = Join-Path $env:ProgramData "SrePackageDeployment\Logs"
+    New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+    $logPath = Join-Path $logDirectory "Chrome-Remove-$Version-$([guid]::NewGuid().ToString('N')).log"
+    $arguments = "/x $Code /qn /norestart REBOOT=ReallySuppress /L*v `"$logPath`""
+    $process = Start-Process -FilePath (Join-Path $env:SystemRoot "System32\msiexec.exe") -ArgumentList $arguments -Wait -PassThru
+    if ($process.ExitCode -eq 3010) {
+        throw "Chrome removal requires a reboot (3010). Arrange a separately approved reboot and revalidate. MSI log: '$logPath'."
+    }
+    if ($process.ExitCode -ne 0) {
+        throw "Chrome removal failed with exit code $($process.ExitCode). No retry or reboot was performed. MSI log: '$logPath'."
+    }
+    $after = Get-MachineChromeState
+    if (@($after.Files).Count -gt 0 -or @($after.Registrations).Count -gt 0) {
+        throw "Chrome removal returned 0 but machine-wide Chrome remains. MSI log: '$logPath'."
+    }
+    return [pscustomobject]@{
+        Status = "RemovedVerified"
+        Version = $Version
+        ProductCode = $Code
+        RebootRequired = $false
+        LogPath = $logPath
+    }
+}
+
+if ($PSCmdlet.ParameterSetName -eq "Uninstall") {
+    Invoke-ChromeEnterpriseMsiUninstall -Code $ProductCode -Version $ExpectedVersion | ConvertTo-Json
+}
+else {
+    Invoke-ChromeEnterpriseMsiInstall -PackagePath $MsiPath -Version $ExpectedVersion -Sha256 $ExpectedSha256 -SignerSubject $ExpectedSignerSubject |
+        ConvertTo-Json
+}
