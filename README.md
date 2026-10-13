@@ -304,6 +304,114 @@ Run the dependency-free mocked checks without installing Chrome:
 .\tests\Test-ArcVmApplicationStorageRole.ps1
 ```
 
+#### Direct CLI assignment of a staged MSI version
+
+Once the reviewed MSI ZIP is staged in private blob storage and its Gallery
+version has finished replication, **assign that version to the pilot**. Do not
+download a rolling MSI on the machine, republish the failed EXE version, or
+uninstall Chrome just to reset inventory.
+
+The successful pilot used Chrome Enterprise MSI **155.0.8059.40**, explicitly
+mapped to Gallery version **155.0.8059**. These are deployment evidence, not a
+default approval policy or a promise that Google's current download still
+contains that version. The public Chrome catalog remains blocked until you
+approve your own artifact and deployment scope.
+
+The CLI used for the pilot did not expose an
+`az connectedmachine application add` command. The working alternative is
+**`az rest --method put`** against the Arc machine's application resource. This
+creates or updates that one assignment; it does not upload the MSI or create
+the Gallery version. The ZIP, pinned launcher, and Gallery install/update
+commands must already be configured as described in the
+[MSI packaging instructions](docs/arc-vm-applications-deployment.md#chrome-enterprise-msi-machine-wide-deployment).
+
+After approving the exact machine, version, target-region replication, and
+recovery plan, replace the placeholders and run this PowerShell example:
+
+```powershell
+$ErrorActionPreference = "Stop"
+$subscriptionId = "<subscription-id>"
+$machineResourceGroup = "<arc-machine-resource-group>"
+$machineName = "<pilot-machine>"
+$galleryResourceGroup = "<gallery-resource-group>"
+$galleryName = "<gallery-name>"
+$applicationName = "chromewin"
+$galleryVersion = "<approved-three-part-gallery-version>"
+$targetRegion = "<target-region>"
+
+$machineId = "/subscriptions/$subscriptionId/resourceGroups/$machineResourceGroup/providers/Microsoft.HybridCompute/machines/$machineName"
+$versionId = "/subscriptions/$subscriptionId/resourceGroups/$galleryResourceGroup/providers/Microsoft.Compute/galleries/$galleryName/applications/$applicationName/versions/$galleryVersion"
+$assignmentUri = "https://management.azure.com$machineId/applications/$applicationName`?api-version=2026-02-01-preview"
+
+$machine = az rest --subscription $subscriptionId --method get `
+    --url "https://management.azure.com$machineId`?api-version=2024-07-10" `
+    --output json | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw "Unable to read the pilot machine." }
+if ($machine.properties.status -ne "Connected" -or $machine.location -ne $targetRegion) {
+    throw "Pilot must be Connected in the approved target region."
+}
+
+$version = az rest --subscription $subscriptionId --method get `
+    --url "https://management.azure.com$versionId`?api-version=2024-03-03" `
+    --output json | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw "Unable to read the approved Gallery version." }
+if ($version.properties.provisioningState -ne "Succeeded") {
+    throw "Gallery version is not ready."
+}
+
+$body = @{
+    location = $targetRegion
+    properties = @{
+        packageReferenceId = $versionId
+        order = 0
+        treatFailureAsDeploymentFailure = $true
+    }
+} | ConvertTo-Json -Depth 5
+
+$bodyPath = Join-Path $env:TEMP ("arc-msi-assignment-" + [guid]::NewGuid().ToString("N") + ".json")
+[IO.File]::WriteAllText($bodyPath, $body)
+try {
+    az rest --subscription $subscriptionId --method put `
+        --url $assignmentUri --body "@$bodyPath" --output none
+    if ($LASTEXITCODE -ne 0) { throw "Arc application assignment failed." }
+}
+finally {
+    Remove-Item -LiteralPath $bodyPath -Force
+}
+
+az rest --subscription $subscriptionId --method get --url $assignmentUri --output json
+if ($LASTEXITCODE -ne 0) { throw "Unable to read assignment status." }
+```
+
+The JSON file avoids Windows command-line quoting problems with inline bodies.
+The PUT is asynchronous: `Updating` is not installation success. Wait for the
+assignment to reach `Succeeded`, then independently verify the expected
+Program Files `chrome.exe` version, HKLM MSI ProductCode/version, and a
+successful MSI log under `%ProgramData%\SrePackageDeployment\Logs`. The pilot
+verified all three, including MSI return code `0`; the operator subsequently
+confirmed it worked. Interactive multi-user validation and live uninstall
+recovery are separate checks.
+
+This direct path does **not** run the wrapper's catalog, identity/RBAC, or
+rollback checks. Review existing assignments and the genuine recovery action
+before approving the write. Only the named application on the named machine
+is changed; it is not a fleet rollout. Keep the version excluded from Gallery
+latest-version selection until broader rollout is approved.
+
+**Resource Graph subscription/tenant context:** an `AccessDenied` response can
+come from authenticating to a different tenant than the requested query scope.
+The pilot needed no new RBAC grants; this scoped command worked:
+
+```powershell
+az graph query --subscription $subscriptionId --subscriptions $subscriptionId `
+    -q resources --first 1 --output json
+```
+
+`--subscription` selects the authentication context; `--subscriptions` selects
+the query scope. The wrappers currently use the active CLI context, so confirm
+it matches the deployment subscription before using them. Do not grant broad
+Reader/Owner access just to work around a context mismatch.
+
 ## Using `sre.azure.com`
 
 This solution is intended to be operated through

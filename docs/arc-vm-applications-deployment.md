@@ -83,7 +83,7 @@ Use the 7-Zip example as a separate VM Application deployment proof, not as an a
 2. The deployment catalog selects the exact approved Gallery version for the target ring; it does not select the latest 7-Zip release.
 3. SRE Agent verifies that target version is available in the canary machine's region.
 4. SRE Agent proposes a canary application assignment; a human approves it.
-5. Assign the Gallery version using `az connectedmachine application add`; use `update` only for an existing application assignment.
+5. Assign the Gallery version using the reviewed wrapper, or use `az rest --method put` against the single machine's application resource. Do not assume the installed CLI exposes `az connectedmachine application add`.
 6. Verify the Arc application resource instance view, Azure Activity Log, Change Tracking inventory, and post-install health.
 7. Retain the prior Gallery application version before any broader rollout.
 
@@ -241,6 +241,18 @@ versions with `excludeFromLatest = true` and use explicit version references.
 A remove command such as `cmd /c exit 0` performs no removal and must not be
 counted as rollback evidence. A Gallery version in `Succeeded` state proves
 publication, not that Chrome installed on an Arc machine.
+
+For a version already staged and replicated, the
+[direct CLI assignment example](../README.md#direct-cli-assignment-of-a-staged-msi-version)
+shows the tested `az rest` PUT, a file-based JSON body for Windows quoting, and
+explicit subscription authentication without changing the global CLI context.
+That path creates or updates only the named application assignment, bypassing
+the wrapper's catalog and rollback checks; review scope and recovery separately.
+The MSI pilot verified Chrome `155.0.8059.40`, Gallery version `155.0.8059`,
+the exact HKLM MSI registration, and successful installer return code `0`.
+The operator confirmed the installation worked. This version mapping is
+evidence, not a default target for other environments, and it does not prove
+that multi-user launch or live removal recovery has been tested.
 
 After the pilot, confirm Chrome launches under at least two representative
 non-administrator user accounts, check `chrome://policy`, and wait for fresh
