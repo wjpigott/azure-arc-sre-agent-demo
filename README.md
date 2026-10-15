@@ -64,6 +64,96 @@ Arc agent lifecycle is a dedicated proactive-management demonstration, using the
 
 Use representative out-of-support and aging test machines to prove version classification and a proposed phased upgrade plan before any agent update is approved.
 
+## Applications and install/uninstall commands
+
+The deployment catalog currently covers **7-Zip** (`7zipexe`) and **Google
+Chrome Enterprise x64 MSI** (`chromewin`). Chrome is an application in this
+demo, not just an inventory item. Its successful pilot verified vendor version
+`155.0.8059.40`, mapped explicitly to Gallery version `155.0.8059`; this is
+historical deployment evidence, not approval to deploy that version elsewhere.
+The public Chrome catalog remains blocked until artifact and scope placeholders
+are reviewed and resolved.
+
+| Application | Deployment status | Install command | Uninstall command |
+| --- | --- | --- | --- |
+| Google Chrome Enterprise x64 MSI | Machine-wide MSI pilot verified; live removal and multi-user validation are not yet recorded as tested. | Approved MSI ZIP and pinned launcher; commands below. | Guarded MSI helper with the approved ProductCode and exact version; command below. |
+| 7-Zip | Catalog-driven Canary target `26.03.0`; retained rollback assignment `0.0.4`. | Read the exact Gallery version's install action before deployment. The recorded fragment `ren 7z2603 7z2603.zip` needs filename validation; it is not a complete install recipe. | No verified complete remove command is recorded in this repository. Inspect and review the Gallery remove action before use. |
+| Adobe Acrobat | Inventory/baseline assessment only. | Not recorded or approved. | Not recorded or approved. |
+| Python | Inventory/baseline assessment only. | Not recorded or approved. | Not recorded or approved. |
+| Oracle Java 8 | Inventory/baseline assessment only. | Not recorded or approved. | Not recorded or approved. |
+
+Inventory coverage does not imply installation or removal support. Do not
+substitute guessed silent switches, a different installer type, or a no-op
+remove command. All changes require approval of the exact artifact and target.
+
+### Chrome install and uninstall
+
+Run as SYSTEM or an elevated administrator on supported x64 Windows. From the
+approved package directory, the install helper accepts:
+
+```powershell
+.\Install-ChromeEnterpriseMsi.ps1 `
+  -MsiPath ".\GoogleChromeStandaloneEnterprise64.msi" `
+  -ExpectedVersion "<approved-four-part-chrome-version>" `
+  -ExpectedSha256 "<approved-msi-sha256>" `
+  -ExpectedSignerSubject "<exact-approved-authenticode-signer-subject>"
+```
+
+For the Gallery install/update action, package the helper, approved MSI, and a
+reviewed pinned launcher named `Install-Chrome.ps1` together. The Windows
+`cmd.exe` command is:
+
+```text
+tar.exe -xf chrome-enterprise-msi.zip && powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\Install-Chrome.ps1
+```
+
+For removal, use the helper from the extracted approved package:
+
+```powershell
+.\Install-ChromeEnterpriseMsi.ps1 -Uninstall `
+  -ProductCode "<approved-msi-product-code-in-braces>" `
+  -ExpectedVersion "<approved-four-part-chrome-version>"
+```
+
+For a Gallery remove action, extract the ZIP first and invoke that helper with
+`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File`,
+passing the same reviewed ProductCode and version.
+
+The helper waits for these underlying MSI commands and verifies the result;
+these are documented for reference, not a replacement for its hash, signer,
+version, registration, and post-install/removal checks:
+
+```text
+msiexec.exe /i "<approved-msi>" /qn /norestart ALLUSERS=1 REBOOT=ReallySuppress /L*v "<local-log>"
+msiexec.exe /x <approved-msi-product-code-in-braces> /qn /norestart REBOOT=ReallySuppress /L*v "<local-log>"
+```
+
+Neither operation automatically reboots. Exit code `3010` requires a separately
+approved reboot and revalidation. Removal preserves browser profiles and is
+recovery to an absent machine-wide installation, not a downgrade or verified
+rollback. See the [Chrome MSI packaging and validation guide](docs/arc-vm-applications-deployment.md#chrome-enterprise-msi-machine-wide-deployment).
+
+### Inspect the exact Gallery package commands
+
+This read-only command retrieves the configured commands for either application.
+Use `7zipexe` or `chromewin` and an explicitly approved three-part version:
+
+```powershell
+az sig gallery-application version show `
+  --subscription "<subscription-id>" `
+  --resource-group "<gallery-resource-group>" `
+  --gallery-name "<gallery-name>" `
+  --application-name "<gallery-application-name>" `
+  --version-name "<approved-three-part-gallery-version>" `
+  --query "publishingProfile.manageActions.{install:install,update:update,uninstall:remove}" `
+  --output json
+```
+
+Review package filenames, installer type, exit-code handling, and actual removal
+behavior before using the returned commands. A configured command is not proof
+that it works. Assignment rollback and package uninstall are different operations;
+see the [7-Zip canary preflight](docs/7zip-vm-application-canary.md#package-command-preflight).
+
 ## Deployment inputs
 
 | Item | Value |
