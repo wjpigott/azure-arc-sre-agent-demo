@@ -65,10 +65,16 @@ Set it to run daily, select **Review** mode, and have results remain in the agen
 
 ## Post-deployment validation
 
-Create or reconcile the selected software tracker and Arc priority/lifecycle
-reports using [live-report-bootstrap.md](live-report-bootstrap.md).
-The authoring catalog and prompts do not create saved reports automatically;
-validate source access and save the generated IDs privately after authoring.
+Install the required Live Reports using the
+[bundle deployment guide](../livereports/README.md). Choose chat attachment,
+scripted installation through the chat API, or local preparation. For scripted
+installation with this repository, use `codeRefs/<repo>/livereports/reports`
+as the bundle path and `codeRefs/<repo>/livereports/live_report_bundle.py`
+as the script path. Tool-access approval remains manual.
+
+Customize the fleet and priority bundles' pseudonymized machine lists and
+resource snapshots before relying on their findings. Reopen and reload each
+saved report, validate source access, and save the generated IDs privately.
 
 Ask the agent:
 

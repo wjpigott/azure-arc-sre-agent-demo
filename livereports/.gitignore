@@ -1,0 +1,9 @@
+# Never commit real environment data
+*.local.txt
+*.local.json
+redaction-map*
+bundles/
+tmp/
+out/
+install-plan.json
+__pycache__/

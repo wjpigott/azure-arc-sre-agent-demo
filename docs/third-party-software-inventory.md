@@ -11,7 +11,9 @@ The inventory includes system-level software on Windows and installed packages o
 On 2026-09-01, `<canary-machine>` reported Python 3.13.12 through `ConfigurationData` software inventory. This proves the basic third-party inventory scenario is available without a new agent or connector.
 
 Use [queries/software-inventory.kql](../queries/software-inventory.kql) to inspect current inventory.
-Use [queries/third-party-software-lifecycle.kql](../queries/third-party-software-lifecycle.kql) for the curated lifecycle-report dataset.
+Use the tracker's
+[inventory query](../livereports/templates/third-party-software-tracker/queries/report-inventory.kql)
+for its Windows application dataset.
 
 ## SRE Agent prompt
 
@@ -46,4 +48,13 @@ Do not install, update, remove, or reconfigure software.
 4. Demonstrate version consistency and drift findings in the SRE Agent Live Report.
 5. Add Python virtual-environment/package inventory only when a customer scenario requires it; collect only the required package names and versions to control cost and exposure.
 
-See [third-party-software-live-report.md](third-party-software-live-report.md) for the reusable Live Report prompt and version-baseline process.
+See the [Live Report deployment guide](../livereports/README.md) for installable
+bundles and the [tracker template guide](../livereports/templates/third-party-software-tracker/README.md)
+for maintaining the dated vendor-latest reference.
+
+The tracker reference is not the approved-version policy in
+[third-party-software-baseline.json](../config/third-party-software-baseline.json).
+Before setting an `approvedVersion`, verify the vendor's authoritative release
+notes and record the source, review date, and update risk. A missing approved
+target means "needs review"; a report's embedded reference alone does not
+authorize an update.

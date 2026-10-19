@@ -229,9 +229,7 @@ See [docs/arc-extension-lifecycle.md](docs/arc-extension-lifecycle.md) for separ
 See [docs/ama-no-telemetry-runbook.md](docs/ama-no-telemetry-runbook.md) for diagnosis when AMA and its DCR are healthy in Azure but data is absent from `<log-analytics-workspace>`.
 See [docs/on-prem-operations-scenarios.md](docs/on-prem-operations-scenarios.md) for cluster-aware maintenance and other on-premises reliability scenarios.
 See [docs/third-party-software-inventory.md](docs/third-party-software-inventory.md) for software inventory scope, SRE Agent prompt, and collection boundaries.
-See [docs/third-party-software-live-report.md](docs/third-party-software-live-report.md) for the reusable software-lifecycle Live Report prompt and version-baseline process.
-See [docs/software-live-report-template.md](docs/software-live-report-template.md) for a sanitized pattern that can be reused in another SRE Agent environment.
-See [docs/live-report-bootstrap.md](docs/live-report-bootstrap.md) for the two selected report blueprints and new-deployment authoring steps.
+See [livereports/README.md](livereports/README.md) for the current Live Report bundles, installation options, editable tracker source, and validation steps.
 See [docs/software-remediation-staging.md](docs/software-remediation-staging.md) for the approval-gated package-staging and notification workflow.
 See [docs/arc-vm-applications-deployment.md](docs/arc-vm-applications-deployment.md) for the preferred Azure Arc VM Applications deployment path.
 See [docs/7zip-vm-application-canary.md](docs/7zip-vm-application-canary.md) for the one-machine, approval-gated 7-Zip canary assessment and deployment.
@@ -672,41 +670,85 @@ and [Manage permissions for Azure SRE Agent](https://learn.microsoft.com/azure/s
 
 Deploy `<sre-agent-name>` in `<sre-agent-resource-group>`. Give it a Log Analytics connector for `<log-analytics-workspace>` and read access to the intended Arc scope.
 
-### Selected reports for new deployments
+### Live Reports
 
-Include these report patterns in post-deployment setup:
+[livereports/](livereports/) is the source of truth for report definitions and
+deployment. Its [deployment guide](livereports/README.md) covers installation,
+updates, export, sanitization, and troubleshooting. The portable
+`*.livereport.json` bundles carry saved HTML, CSS, JavaScript, tool permissions,
+and integrity metadata; they are not the portal's static **Download HTML** exports.
 
-| Report | Reusable authoring blueprint |
+| Bundle | Purpose |
 | --- | --- |
-| Third-Party Software Update Tracker | [Software report prompt](reports/third-party-software-update-tracker.prompt.txt): summary cards, priority updates, searchable inventory, per-machine chart, version references |
-| Arc Priority & Lifecycle | [Fleet report prompt](reports/arc-priority-lifecycle.prompt.txt): priority queue, patch/maintenance readiness, lifecycle, capacity, reliability/configuration |
+| [Arc Fleet Operations](livereports/reports/arc-fleet-operations-cleaned.livereport.json) | Fleet inventory, telemetry coverage, resource pressure, failures, agent versions, and priority actions. |
+| [Arc Priority & Lifecycle](livereports/reports/arc-priority-lifecycle-cleaned.livereport.json) | Priority queue, patch/maintenance readiness, lifecycle, performance, and reliability. |
+| [Third-Party Software Update Tracker](livereports/reports/third-party-software-update-tracker-cleaned.livereport.json) | Windows application versions compared with a dated vendor-latest reference; no embedded inventory. Recommended for new environments. |
+| [Tracker with demo snapshot](livereports/reports/third-party-software-update-tracker-demo-snapshot-cleaned.livereport.json) | The tracker with a pseudonymized fallback snapshot when the live query fails. |
 
-[config/live-report-catalog.json](config/live-report-catalog.json) records scope
-bindings, read connectors, policy sources, thresholds and validation checks.
-Follow the [bootstrap guide](docs/live-report-bootstrap.md) to resolve private
-environment settings, create/reconcile the reports through `sre.azure.com`,
-and save report IDs outside this public repository.
+Prerequisites: Python 3.8+ for the bundle tool, report-authoring access on the
+target SRE Agent, and **Log Analytics Reader** for its identity on the workspace.
+All bundles allow only `system-mcp-monitor_monitor_workspace_log_query`.
+Fleet reports need Heartbeat, Perf, and Event; the tracker needs Change Tracking
+`ConfigurationData`. Check inventory coverage with the
+[coverage query](livereports/templates/third-party-software-tracker/queries/inventory-coverage.kql).
 
-**These are authoring blueprints, not automatically deployed reports.** The
-selected HTML exports contain static data, not live queries or connector code;
-the raw exports are intentionally not committed. Creation still uses the
-supported Live Reports authoring flow until a supported automation mechanism
-is implemented and validated. The deployment scripts do not create reports.
+Choose an installation path:
 
-Preserve the layouts while correcting the snapshot rules: newer-than-approved
-software is `AheadOfPolicy`, missing baselines are `NeedsReview`, and source
-freshness is separate from page refresh time. Do not use a snapshot's vendor
-version, machine inventory or fleet counts as deployment defaults.
+1. **In chat:** attach
+   [live_report_bundle.py](livereports/live_report_bundle.py) and the selected
+   bundle to the target SRE Agent. Follow the deployment guide's `prepare`
+   prompt with your subscription, workspace customer ID, and workspace resource
+   group. Ask the agent to call **SaveReport** from the generated install plan
+   without editing or regenerating the HTML.
+2. **From a workstation:** connect this repository to the target agent, then use
+   the tool's `install` command. For this repository, use
+   `--repo-path codeRefs/<repo>/livereports/reports` and
+   `--script-path codeRefs/<repo>/livereports/live_report_bundle.py`.
+   Start with `--dry-run`; Azure CLI authentication is required. The command
+   uses the chat API, not a direct report-import REST endpoint.
+3. **Prepare locally:** from the repository root, run:
 
-After creating each report, record its generated ID outside this public
-repository. The live report refreshes through its approved Azure resource and
-Log Analytics tools; downloaded HTML is a portable point-in-time artifact and
-should be reviewed for environment identifiers before sharing.
+   ```powershell
+   py -3 .\livereports\live_report_bundle.py prepare `
+     .\livereports\reports\third-party-software-update-tracker-cleaned.livereport.json `
+     --set "subscription=<subscription-id>" `
+     --set "workspace=<workspace-customer-id>" `
+     --set "resourceGroup=<workspace-resource-group>" `
+     --drop-suffix " - Cleaned" --name-prefix "Test - " `
+     --out-dir .\Temp\livereport-install
+   ```
 
-For new deployments, use the selected catalog display names for canonical
-reports and append `- DEV - <deployment-id>` or `- TEST - <deployment-id>` for
-validation. Existing demos can retain their `Arc Fleet Operations` report;
-do not silently rename or overwrite it.
+   Attach the generated HTML and use the name, description, and allowed tools
+   from the generated install plan. Keep all prepared files and report IDs
+   outside source control.
+
+Review and approve the tool-access prompt for each report. Open it from
+**Live Reports**, then select **Reload** to verify live data. For trackers,
+require **Data: LIVE**; **SNAPSHOT** is fallback data, not successful live access.
+Use `--report-id <existing-id>` for an intentional new version, rather than
+creating duplicates or overwriting another environment's report.
+
+**Customize fleet data before relying on findings.** The fleet and priority
+bundles include pseudonymized machine lists and point-in-time Azure resource
+snapshots. Replace those constants, planned-offline exceptions, and snapshot
+timestamps with the intended environment as described in the deployment guide.
+A freshly rendered page does not make embedded resource evidence current.
+
+The tracker is read-only, not a software installer. Its dated vendor-latest
+reference is separate from the approved ring targets in
+[third-party-software-baseline.json](config/third-party-software-baseline.json);
+review the [editable template guide](livereports/templates/third-party-software-tracker/README.md)
+before updating references or treating findings as an approved change.
+
+Validate bundles and tracker logic without Azure:
+
+```powershell
+py -3 .\livereports\live_report_bundle.py verify ".\livereports\reports\*.livereport.json"
+node .\livereports\templates\third-party-software-tracker\tests\run-tests.js
+```
+
+The root [validation workflow](.github/workflows/validate-live-reports.yml)
+also checks that public bundles retain placeholders and contain no real GUIDs.
 
 The following providers were registered before deployment:
 
@@ -762,28 +804,10 @@ outdated agents, respecting PatchRing, ArcAgentRing, MaintenanceWindow, and docu
 exceptions. Group findings into 30, 60, and 90 day actions. Do not make changes.
 ```
 
-### Live Report prompt
-
-This general-purpose `Arc Fleet Operations` prompt is an alternative to the
-selected `Arc Priority & Lifecycle` blueprint. The selected two-report setup
-does not require creating a third fleet dashboard:
-
-```text
-Create a Live Report named "Arc Fleet Operations" for my Azure Arc lab.
-
-Use the connected Azure subscription and <log-analytics-workspace> workspace. Build a deterministic
-operations dashboard that refreshes its data each time it opens. Include fleet inventory,
-telemetry coverage, patch posture, resource pressure, operational failures, Arc Connected
-Machine agent versions, recent Change Tracking changes, and a ranked evidence-cited priority
-action list.
-
-Treat <planned-offline-linux-machine> and <planned-offline-windows-machine> as planned offline unless I say otherwise. Use read-only
-tools only. Do not modify resources, restart machines, deploy patches, or upgrade agents.
-```
-
 ### Extension lifecycle prompt addition
 
-The original SRE Agent health and Live Report prompts do not explicitly require extension lifecycle analysis. Add the following text to the Live Report or daily-task instructions:
+For an extension lifecycle assessment, add the following text to the daily-task
+instructions or use it when intentionally extending an installed report:
 
 ```text
 Include Arc extension lifecycle posture. Report extension provisioning failures, foundational
@@ -826,7 +850,7 @@ Keep the agent read-only and in **Review** mode initially. Do not grant arbitrar
 
 ## Next steps
 
-1. Create or reconcile the two selected reports using [the bootstrap guide](docs/live-report-bootstrap.md), then validate each section against its source data. Existing demos may retain the alternative `Arc Fleet Operations` report. Use the documented DEV or TEST suffix for deployment-validation reports.
+1. Install or update the required [Live Report bundles](livereports/README.md), customize fleet snapshots for the intended environment, and validate each section against its source data. Use `--name-prefix "Test - "` for deployment-validation reports.
 2. Create the first scheduled task: `Arc Fleet Daily Health`, retaining results in the agent portal during the validation period.
 3. Add the approved Arc agent version baseline, deployment rings, support horizon, and exception registry to this repository.
 4. Add an Azure Monitor health model and alert that opens a read-only agent investigation for fleet degradation.

@@ -52,7 +52,7 @@ Create a skill in **Builder > Skills** named `third-party-software-staging` with
 
 - **Description:** Use when a verified third-party software update needs to be prepared for an approved maintenance change.
 - **Tools initially:** `RunAzCliReadCommands` and the existing Log Analytics query tool only.
-- **Knowledge files:** `third-party-software-inventory.md`, `third-party-software-live-report.md`, and this document.
+- **Knowledge files:** [third-party-software-inventory.md](third-party-software-inventory.md), the [Live Report deployment guide](../livereports/README.md), and this document.
 - **No write tool at first:** The skill creates a recommendation/manifest only.
 
 After the recommendation flow is trusted, attach one narrowly scoped staging workflow. The staging workflow must accept a pre-approved request ID, not free-form product names or URLs.

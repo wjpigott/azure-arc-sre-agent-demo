@@ -80,8 +80,8 @@ Status legend: `[x]` completed and evidenced, `[-]` in progress or needs validat
 - [ ] Add certificate expiry monitoring for the WAC gateway and selected test certificates.
 - [x] Validate third-party software inventory in `<log-analytics-workspace>` Change Tracking data: Python 3.13.12 observed on `<canary-machine>`.
 - [x] Create the read-only third-party software lifecycle Live Report in Azure SRE Agent.
-- [x] Capture the reusable inventory query, version-baseline template, and Live Report prompt in this repository.
-- [x] Capture the SRE Agent Live Report connector/query pattern as a sanitized deployment template.
+- [x] Maintain the current [Live Report bundles, deployment tool, and editable tracker source](../livereports/README.md) in this repository.
+- [ ] Install the required bundles in the target agent, customize fleet snapshots, and verify reopening and reloading against live data.
 - [ ] Create an approved-version baseline for selected third-party software, beginning with Python and Acrobat.
 - [x] Document the approval-gated third-party software remediation-staging architecture, request schema, notification template, and SRE Agent planning prompt.
 - [ ] Select a noncritical product and approved vendor URL/SHA-256 for the first package-staging demonstration.
