@@ -33,6 +33,11 @@ that cannot be installed.
 2. **A Log Analytics workspace** that receives data from your machines:
    - Heartbeat, Perf and Event for the fleet and priority reports.
    - `ConfigurationData` from Change Tracking & Inventory for the tracker.
+   - For a new tenant/workspace, complete the
+     [first-time inventory setup](../docs/third-party-software-inventory.md#first-time-setup-in-a-new-workspace).
+     The telemetry DCR script does not install AMA or enable Change Tracking.
+     Use the Arc telemetry workspace, not automatically the workspace created
+     for the SRE Agent's Application Insights.
 3. **Access for the agent.** Its managed identity needs **Log Analytics Reader** (or Reader) on the
    workspace or its resource group.
 4. **The query tool.** The agent must have the built-in tool `system-mcp-monitor_monitor_workspace_log_query`.
@@ -73,6 +78,15 @@ Use this when the repository is connected to the target agent as a code reposito
 under `codeRefs/<repo>/`. You need the Azure CLI and `az login`.
 Run local commands in this guide from `livereports/`. For this parent repository,
 the agent-side paths include `livereports/` as shown below.
+
+**First agent setup:** connect the repository through **Code > Connect
+repositories** or **Builder > Code Access > GitHub** and confirm the exact
+`codeRefs` path. Signing into GitHub in VS Code does not connect the SRE Agent.
+PAT was the usable option in the tested VS Code integrated-browser deployment;
+OAuth and GitHub App availability depend on the supported connection and
+environment. See the [GitHub/PAT setup guide](../docs/deploy-azure-sre-agent.md#connect-this-repository-to-the-agent).
+Keep tokens out of chat, files, and commands. Options A and C do not require a
+repository connection.
 
 ```bash
 python3 live_report_bundle.py install \
@@ -117,6 +131,12 @@ Pass the existing report ID, so a new **version** is saved instead of a second r
   banner gives the reason in both cases.
 - **Fleet and priority reports:** the machine counts match your environment. See "Customizing the demo
   data" below.
+- Check timestamps and test section expand/collapse controls, not just whether
+  the report opens. A successful save, bundle checksum, or extension deployment
+  is not proof of live data or working browser interactions.
+- If initial inventory is pending, record **deployed, data validation pending**.
+  It is valid to save the three reports first and validate later, but empty
+  results must not be reported as proof of compliance or no installed software.
 
 ## Customizing the demo data
 
@@ -126,16 +146,52 @@ it with your own machines, they will show as missing or offline.
 
 | Report | Built-in constants to edit |
 |---|---|
-| Fleet Operations | `FLEET` (name, os, agent, rg) and `PLANNED_OFFLINE` |
-| Priority & Lifecycle | `MACHINES`, `FAILED_EXTS`, `SQL_INSTANCES`, `PATCH_ASSESS`, `MAINT`, `PLANNED_OFFLINE` and `ARG_TS` (snapshot date) |
+| Fleet Operations | `FLEET` (name, os, agent, rg), `PLANNED_OFFLINE`, static card text, and standing demonstration priority actions |
+| Priority & Lifecycle | `MACHINES`, `FAILED_EXTS`, `SQL_INSTANCES`, `PATCH_ASSESS`, `MAINT`, `PLANNED_OFFLINE`, `ARG_TS` (snapshot date), visible source timestamps, maintenance/reboot narrative, and the dated agent reference |
 | Tracker (Demo Snapshot) | `SNAPSHOT`, `SNAP_T` and `SNAPSHOT_TAKEN` (fallback only; can be emptied) |
 
-The easiest way to customize is to install the report first, then ask your agent:
-> Open the Live Report "<name>". Replace the FLEET and PLANNED_OFFLINE constants with my Arc machines from Azure
-> Resource Graph, and save a new version. Don't change anything else.
+Customize before operational use. Ask the agent:
+> Prepare the fleet and priority reports for only my approved Arc scope. Query
+> current resource evidence and replace the constants listed above. Remove
+> standing demo priority actions and old maintenance/reboot narrative; replace
+> them only with verified destination evidence. If patch, maintenance or SQL
+> evidence is unavailable, say unknown/not assessed, not compliant. Update
+> visible timestamps and planned-offline card text. Preserve layout, nonce,
+> tool-response decoding and FQDN matching. Use nonce-safe listeners for section
+> controls. Re-export and verify any modified bundle before preparing it. If
+> updating an installed report, save a new version of its existing report ID.
 
 The tracker without built-in data (`third-party-software-update-tracker-cleaned`) needs no
-customization.
+fleet-snapshot customization; it still needs environment bindings, live inventory,
+and review of its dated vendor reference.
+
+## Known fleet and priority bundle limitations
+
+The current published bundles are portable **demo definitions**, not a fully
+automated clean-tenant bootstrap. Binding subscription/workspace/resource group
+does not replace all embedded evidence.
+
+- **Fleet:** standing actions include old machine-specific lifecycle findings,
+  patch-coverage counts, and a fixed missing-DCR count. Remove or rebuild these
+  for the destination. The dynamic phrase "no AMA heartbeat - missing DCR"
+  also overstates the evidence: missing heartbeat alone cannot establish the
+  cause. Verify extensions, DCR associations, destination, and ingestion before
+  claiming a missing DCR.
+- **Priority:** old maintenance failures and reboot-status narrative remain
+  outside the snapshot constants. Replace them as well; clearing `MAINT` or
+  `PATCH_ASSESS` alone is insufficient.
+- **Priority controls:** five inline `onclick` section handlers conflict with
+  the report's nonce CSP. Replace them with `data-*` attributes and
+  `addEventListener` calls inside the existing nonce-bearing script; do not
+  weaken CSP or remove `{REPORT_NONCE}`. Verify the controls after saving.
+- The bundles already include tool-response envelope decoding and normalized
+  short-host/FQDN matching. Preserve these when customizing.
+
+These limitations were corrected in private, destination-specific copies
+during deployment. Those copies contain environment data and are not the
+public bundles. The documentation does not imply the public HTML is fixed.
+Current CI verifies integrity, placeholders and tracker logic; it does not
+prove fleet/priority narrative correctness or browser interaction behavior.
 
 ## Verify bundles before installing or merging
 
@@ -177,5 +233,10 @@ Do these steps inside your SRE Agent workspace.
 | `No {REPORT_NONCE} placeholder found` | You exported a downloaded or rendered copy. Export from GetReport's `htmlPath` instead. |
 | Report shows "Query error" or "Failed to load" | Check the workspace ID and the agent's Log Analytics Reader role, and run the query in Log Analytics. |
 | Tracker shows few machines | Run `templates/third-party-software-tracker/queries/inventory-coverage.kql` and check the Change Tracking DCR and AMA. |
+| Repository path is missing under `codeRefs` | Connect the repository inside the SRE Agent, not just VS Code; verify authentication, repository selection, and clone/index readiness. |
+| OAuth cannot complete in VS Code's integrated browser | Try the external browser or the supported PAT connection option. Follow the agent setup guide; never paste the token into chat. |
+| Fresh workspace has no `ConfigurationData` | Complete Change Tracking solution/table, extension and DCR setup, then allow for the configured collection interval. |
+| Fleet reports missing DCRs despite fresh telemetry | Check demo standing actions and actual DCR associations; missing heartbeat is not proof of missing DCR. |
+| Priority sections do not expand/collapse | Replace CSP-blocked inline handlers with nonce-safe event listeners and re-export the source. |
 | `install` returns 401 | The token must have audience `https://azuresre.dev`, and you need thread-write access on the agent. |
 | Everything in the tracker is "outdated" | The reference versions are stale. See the template README for how to update them. |

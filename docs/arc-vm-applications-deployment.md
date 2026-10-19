@@ -77,6 +77,40 @@ If a machine already has a version newer than its ring target, do not downgrade 
 
 ## First demo: 7-Zip 26.03
 
+### Clean-tenant first-install boundary
+
+The historical version numbers and rollback assignments below describe the
+original lab, not prerequisites already present in a new tenant. The current
+deployment wrappers require an existing assignment matching the catalog's
+approved rollback version. They are **not** a bootstrap installer for a machine
+with no application assignment.
+
+Before a fresh pilot:
+
+1. Confirm the CLI and SRE browser tenant/subscription independently.
+2. Review existing software and Arc application assignments; do not overwrite
+   a newer or unmanaged installation.
+3. Approve exact vendor artifacts, hashes/signers, Gallery version mapping,
+   install/remove behavior, target machine, and costs. Publishing a product
+   does not authorize assigning it to the pilot.
+4. Publish immutable versions and verify replication is actually complete in
+   the pilot's region before assigning an exact version.
+5. If there is no previous assignment, review the supported direct
+   single-machine application-resource API path separately. Do not fabricate
+   a rollback assignment or bypass the wrapper's check by changing its catalog.
+   Removal to an absent installation is not rollback to a prior working version.
+6. Verify guest runtime/version, machine-wide registration, package-specific
+   functionality and health, in addition to assignment instance view. Change
+   Tracking can arrive later; mark inventory verification pending until it does.
+
+The repository does not yet provide a reusable Python packaging helper or a
+general clean-tenant gallery bootstrap. A separately approved Python pilot is
+not authorization to reuse its private package or tenant bindings elsewhere.
+For inventory onboarding, use the
+[new-workspace guide](third-party-software-inventory.md#first-time-setup-in-a-new-workspace).
+
+### Historical canary workflow
+
 Use the 7-Zip example as a separate VM Application deployment proof, not as an automatic follow-on from the existing staging runbook.
 
 1. The third-party lifecycle report identifies 7-Zip version drift.

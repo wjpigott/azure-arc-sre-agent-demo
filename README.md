@@ -14,6 +14,50 @@ The core demonstration flow is:
 4. A Live Report presents a repeatable `Arc Fleet Operations` view without regenerating a dashboard on every open.
 5. The agent proposes an Azure operation only in Review mode; a human approves any patch, restart, or Run Command action.
 
+## First deployment in a new tenant
+
+The historical lab evidence and completed checklist entries in this repository
+are not proof that a new environment is ready. Use this order:
+
+1. **Confirm Azure scope in both places.** Check the Azure CLI tenant and
+   subscription, then separately check the directory and subscription selected
+   in the SRE browser. Switching the CLI does not switch the browser.
+2. **Prepare a pilot and telemetry workspace.** Select explicitly approved Arc
+   machines and a Log Analytics workspace for their data. The workspace created
+   for the SRE Agent's Application Insights is not automatically the Arc
+   telemetry destination.
+3. **Enable collection before interpreting reports.** Install AMA, associate
+   the operational telemetry DCR, and enable Change Tracking & Inventory with
+   its own DCR. The [clean-workspace inventory steps](docs/third-party-software-inventory.md#first-time-setup-in-a-new-workspace)
+   cover prerequisites and ingestion checks. The telemetry script alone does
+   not install these extensions or enable inventory.
+4. **Create and configure the agent.** Follow the
+   [agent deployment guide](docs/deploy-azure-sre-agent.md). Keep Review mode and
+   inspect the actual RBAC assignments rather than assuming the wizard granted
+   read-only access.
+5. **Connect GitHub for repository-based installation.** Use the agent's
+   **Code** setup card or **Builder > Code Access > GitHub**. VS Code's GitHub
+   sign-in is separate. In the tested VS Code integrated-browser setup, PAT was
+   the usable authentication option; see the
+   [GitHub/PAT guidance](docs/deploy-azure-sre-agent.md#connect-this-repository-to-the-agent).
+   Attaching report bundles directly is an alternative that needs no repository
+   connection.
+6. **Prepare and save the three reports.** Start with the no-snapshot software
+   tracker, Fleet Operations, and Priority & Lifecycle. Follow the
+   [bundle guide](livereports/README.md), replace all demo evidence, and approve
+   only the read-only Log Analytics query tool.
+7. **Validate separately from deployment.** A saved report or successful
+   extension does not prove live ingestion. Reopen and reload each report,
+   check machine counts and freshness, and label validation pending if the
+   initial inventory has not arrived.
+
+**Pilot scope warning:** the current
+[`Deploy-SreTelemetry.ps1`](scripts/Deploy-SreTelemetry.ps1) associates DCRs with
+**all connected Arc machines in the selected subscription**. It has no
+machine/resource-group targeting or `-WhatIf` mode. Do not use it for a
+single-machine pilot in a shared subscription; use explicitly scoped DCR
+associations instead.
+
 ### Initial operational questions
 
 - Which Arc machines are unexpectedly disconnected or have stale telemetry?
@@ -164,7 +208,7 @@ see the [7-Zip canary preflight](docs/7zip-vm-application-canary.md#package-comm
 | Primary Log Analytics workspace | `<log-analytics-workspace>` |
 | Log Analytics Workspace ID (customer ID) | `<workspace-id>` |
 | Patch management | Azure Update Manager |
-| Existing change tracking | Change Tracking extensions reporting to `<log-analytics-workspace>` |
+| Change Tracking & Inventory | Existing or newly enabled extensions and inventory DCR reporting to `<log-analytics-workspace>`; verify fresh `ConfigurationData` |
 
 ### Finding the Log Analytics Workspace ID
 
@@ -191,6 +235,7 @@ To retrieve it with Azure CLI:
 
 ```powershell
 az monitor log-analytics workspace show `
+  --subscription "<subscription-id>" `
   --resource-group "<workspace-resource-group>" `
   --workspace-name "<log-analytics-workspace>" `
   --query customerId `
@@ -210,6 +255,7 @@ Retrieve that separately:
 
 ```powershell
 az monitor log-analytics workspace show `
+  --subscription "<subscription-id>" `
   --resource-group "<workspace-resource-group>" `
   --workspace-name "<log-analytics-workspace>" `
   --query id `
@@ -669,6 +715,8 @@ and [Manage permissions for Azure SRE Agent](https://learn.microsoft.com/azure/s
 ## Azure SRE Agent setup
 
 Deploy `<sre-agent-name>` in `<sre-agent-resource-group>`. Give it a Log Analytics connector for `<log-analytics-workspace>` and read access to the intended Arc scope.
+See the [first-time setup and GitHub connection instructions](docs/deploy-azure-sre-agent.md)
+before attempting repository-based report installation.
 
 ### Live Reports
 
@@ -691,6 +739,10 @@ All bundles allow only `system-mcp-monitor_monitor_workspace_log_query`.
 Fleet reports need Heartbeat, Perf, and Event; the tracker needs Change Tracking
 `ConfigurationData`. Check inventory coverage with the
 [coverage query](livereports/templates/third-party-software-tracker/queries/inventory-coverage.kql).
+For a new workspace, complete
+[Change Tracking & Inventory setup](docs/third-party-software-inventory.md#first-time-setup-in-a-new-workspace)
+first. Reports may be saved while ingestion is pending, but should not be
+described as live-validated until their queries return the expected data.
 
 Choose an installation path:
 
@@ -733,6 +785,12 @@ bundles include pseudonymized machine lists and point-in-time Azure resource
 snapshots. Replace those constants, planned-offline exceptions, and snapshot
 timestamps with the intended environment as described in the deployment guide.
 A freshly rendered page does not make embedded resource evidence current.
+The current fleet/priority bundles also contain demonstration narrative and
+priority actions; the priority bundle has inline section-toggle handlers that
+require correction for nonce CSP. Read the
+[known limitations and required customization](livereports/README.md#known-fleet-and-priority-bundle-limitations)
+before using either report operationally. These documentation updates do not
+change the published bundle HTML or automate its customization.
 
 The tracker is read-only, not a software installer. Its dated vendor-latest
 reference is separate from the approved ring targets in
@@ -753,8 +811,8 @@ also checks that public bundles retain placeholders and contain no real GUIDs.
 The following providers were registered before deployment:
 
 ```powershell
-az provider register --namespace Microsoft.App
-az provider register --namespace Microsoft.CloudHealth
+az provider register --subscription "<subscription-id>" --namespace Microsoft.App
+az provider register --subscription "<subscription-id>" --namespace Microsoft.CloudHealth
 ```
 
 The agent must stay in **Review** mode with no privileged/remediation tools during the initial demonstration period.
@@ -823,11 +881,18 @@ The `infra/dcr` definitions are read-only. They do not patch, restart, configure
 
 - Windows: CPU, available memory, logical-disk free space, system uptime, and critical/error Windows events.
 - Linux: CPU, available memory, logical-disk free space, and warning-or-higher syslog.
-- Existing Change Tracking remains independent and continues to collect inventory, services, software, and configuration changes.
+- Change Tracking remains independent. Existing collection continues unchanged;
+  a new environment must enable it separately for software inventory and any
+  other approved change categories.
 
 ## Deploy or reconcile telemetry
 
-Run PowerShell from this repository after authenticating with Azure CLI:
+Run PowerShell from this repository after authenticating with Azure CLI.
+**This command targets every connected Arc machine in the subscription**, not
+just a pilot or the DCR's resource group. It changes the default CLI
+subscription, creates/updates the two operational DCRs, and associates them;
+it does not install AMA or Change Tracking. Review and approve that scope first.
+There is no built-in `-WhatIf` or machine filter.
 
 ```powershell
 .\scripts\Deploy-SreTelemetry.ps1 `
@@ -836,7 +901,10 @@ Run PowerShell from this repository after authenticating with Azure CLI:
   -WorkspaceResourceId "/subscriptions/<subscription-id>/resourceGroups/<workspace-resource-group>/providers/Microsoft.OperationalInsights/workspaces/<log-analytics-workspace>"
 ```
 
-The script creates or updates the two DCRs and associates the applicable rule with each currently connected Arc machine. It intentionally skips disconnected hosts; run it again after a host reconnects.
+The script intentionally skips disconnected hosts; run it again after a host
+reconnects only if the same subscription-wide scope remains approved. For a
+pilot, add the applicable DCR association to each explicitly selected Arc
+resource through Azure Monitor instead of running this bulk script.
 
 ## Validate ingestion
 
