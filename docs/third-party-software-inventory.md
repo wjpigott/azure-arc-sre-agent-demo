@@ -220,6 +220,16 @@ Do not assume that an existing DCR association will automatically reinstall a
 deleted AMA extension: explicitly reinstall it as above, or verify that the
 approved onboarding/policy remediation actually ran.
 
+If AMA stays `Creating` and a read-only Run Command stays `Unknown` with no
+start time or output, confirm guest responsiveness and inspect the Arc
+extension manager locally, including
+`C:\ProgramData\GuestConfig\ext_mgr_logs\gc_ext.log`. Arc `Connected` does not
+prove extension execution is healthy. Inspect the responsible Windows service
+and executable before considering an approved restart; do not queue repeated
+reinstalls or assume that a zero Run Command exit code means it executed.
+Always check `instanceView.executionState`: ARM provisioning success can also
+accompany an execution timeout.
+
 ### Validate recovery and know when to escalate
 
 1. Confirm the reinstalled AMA extension succeeds and its processes start from
