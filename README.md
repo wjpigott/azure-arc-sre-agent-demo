@@ -50,11 +50,12 @@ are not proof that a new environment is ready. Use this order:
    extension does not prove live ingestion. Reopen and reload each report,
    check machine counts and freshness, and label validation pending if the
    initial inventory has not arrived.
-8. **Optional: authorize an application pilot.** Before asking the agent to
-   inspect the guest or change VM Application assignments, complete the
+8. **Optional: connect the application catalog.** Give the agent read-only
+   access using the
    [role requirements and audit/preview/apply commands](#optional-task-authorize-a-single-machine-application-pilot).
    Include source resource-group metadata read as well as Gallery application
-   read access; managed-resource scope alone is not an RBAC grant.
+   read access; managed-resource scope alone is not an RBAC grant. Publish new
+   applications/versions from VS Code or CI using a separate operator identity.
 
 **Pilot scope warning:** the current
 [`Deploy-SreTelemetry.ps1`](scripts/Deploy-SreTelemetry.ps1) associates DCRs with
@@ -115,8 +116,20 @@ Use representative out-of-support and aging test machines to prove version class
 
 ## Applications and install/uninstall commands
 
-The deployment catalog currently covers **7-Zip** (`7zipexe`) and **Google
-Chrome Enterprise x64 MSI** (`chromewin`). Chrome is an application in this
+The deployment catalog currently covers **7-Zip** and **Google Chrome Enterprise
+x64 MSI**. Its sample Gallery application names, `7zipexe` and `chromewin`, are
+examples, not required names. Customers choose their own Gallery/application
+names and configure each product's `galleryName` and `galleryApplicationName` in
+the [deployment catalog](config/arc-vm-application-deployment-catalog.json)
+after discovering and confirming the intended application. Customers can ask
+for "7zip" or "Chrome"; they should not need to supply ARM resource IDs. SRE
+should discover matching applications within the approved scope, use the catalog
+and existing machine assignment to resolve the intended source, and ask for a
+Gallery/application selection only if the result remains ambiguous. Resolve
+exact IDs internally for access checks and operator commands; never silently
+pick the first match or rename resources to match an example. See
+[customer-defined resource names](docs/arc-vm-applications-deployment.md#customer-defined-resource-names).
+Chrome is an application in this
 demo, not just an inventory item. Its successful pilot verified vendor version
 `155.0.8059.40`, mapped explicitly to Gallery version `155.0.8059`; this is
 historical deployment evidence, not approval to deploy that version elsewhere.
@@ -184,8 +197,9 @@ rollback. See the [Chrome MSI packaging and validation guide](docs/arc-vm-applic
 
 ### Inspect the exact Gallery package commands
 
-This read-only command retrieves the configured commands for either application.
-Use `7zipexe` or `chromewin` and an explicitly approved three-part version:
+This read-only command retrieves the configured commands for the customer's
+chosen Gallery application. Use its exact name and an explicitly approved
+three-part version:
 
 ```powershell
 az sig gallery-application version show `
@@ -475,7 +489,7 @@ $machineResourceGroup = "<arc-machine-resource-group>"
 $machineName = "<pilot-machine>"
 $galleryResourceGroup = "<gallery-resource-group>"
 $galleryName = "<gallery-name>"
-$applicationName = "chromewin"
+$applicationName = "<gallery-application-name>"
 $galleryVersion = "<approved-three-part-gallery-version>"
 $targetRegion = "<target-region>"
 
@@ -832,8 +846,16 @@ before attempting repository-based report installation.
 - [ ] Review the proposed scopes/actions, optionally apply missing assignments,
   and verify access from a new agent chat before approving a deployment.
 
-The optional helper requires Azure CLI authentication and explicitly supplied
-resource IDs in **one subscription**. The operator needs resource and RBAC/deny
+The optional helper defaults to `-AccessMode ReadOnly`: assessment and catalog
+visibility, without machine-assignment, guest Run Command or publishing writes.
+Run it from an operator's Azure-authenticated VS Code terminal; it configures
+the SRE identity's access, not the operator's publishing access.
+
+The optional helper requires Azure CLI authentication and exact resource IDs
+resolved by the operator/discovery workflow in **one subscription**. Those are
+administrative script parameters, not required customer chat input; see
+[name-based application discovery](docs/arc-vm-applications-deployment.md#discover-applications-from-a-product-name).
+The operator needs resource and RBAC/deny
 read access for the audit. Applying changes additionally requires
 `Microsoft.Authorization/roleAssignments/write` at the assignment scopes,
 `Microsoft.Authorization/roleDefinitions/write` at the custom role's assignable
@@ -841,7 +863,9 @@ resource group if creation is needed, and `Microsoft.App/agents/write` if changi
 the agent's managed-resource scope. Do not give these administration permissions
 to the SRE Agent itself.
 
-From the repository root, set your approved destinations:
+From the repository root, populate the approved destinations below from resolved
+resources. The placeholders illustrate the administrative parameter format;
+normal application requests should start with product names, not pasted IDs.
 
 ```powershell
 $subscriptionId = "<subscription-id>"
@@ -867,14 +891,15 @@ $access = @{
 ```
 
 If a separately approved diagnostic must check the **current guest installation**,
-use this variant of the audit, preview and apply commands:
+it is no longer a strictly read-only workflow. Only after separately approving
+that exception, use this variant of the audit, preview and apply commands:
 
 ```powershell
-.\scripts\Set-SreArcApplicationAccess.ps1 @access -IncludeGuestRunCommand
+.\scripts\Set-SreArcApplicationAccess.ps1 @access -AccessMode Deployment -IncludeGuestRunCommand
 .\scripts\Set-SreArcApplicationAccess.ps1 @access `
-    -IncludeGuestRunCommand -AddGalleryResourceGroupToScope -Apply -WhatIf
+    -AccessMode Deployment -IncludeGuestRunCommand -AddGalleryResourceGroupToScope -Apply -WhatIf
 .\scripts\Set-SreArcApplicationAccess.ps1 @access `
-    -IncludeGuestRunCommand -AddGalleryResourceGroupToScope -Apply
+    -AccessMode Deployment -IncludeGuestRunCommand -AddGalleryResourceGroupToScope -Apply
 ```
 
 Run Command write grants arbitrary guest command execution capability; RBAC cannot
@@ -890,8 +915,9 @@ The helper resolves and displays the action principal/object ID before changes.
 
 | Access | Required actions | Assignment scope and helper behavior |
 | --- | --- | --- |
-| Target Arc machine | `Microsoft.HybridCompute/machines/read`, `Microsoft.HybridCompute/machines/applications/read`, `Microsoft.HybridCompute/machines/applications/write` | Reuse sufficient grants; otherwise create a custom role assigned to the exact machine and assignable only within its resource group. No delete or extension-management grant. |
-| Optional guest diagnostics | `Microsoft.HybridCompute/machines/runCommands/read`, `Microsoft.HybridCompute/machines/runCommands/write` | Add to the machine role only with `-IncludeGuestRunCommand`. No Run Command delete or cleanup permission. |
+| Target Arc machine | `Microsoft.HybridCompute/machines/read`, `Microsoft.HybridCompute/machines/applications/read` | Default `ReadOnly` mode reuses sufficient grants or creates a custom reader role on the exact machine, assignable only within its resource group. |
+| Separately approved machine deployment | Additionally `Microsoft.HybridCompute/machines/applications/write` | Only with explicit `-AccessMode Deployment`. This assigns existing approved versions; it does not publish Gallery applications/versions. Do not use for a strictly read-only SRE identity. |
+| Optional guest diagnostics | `Microsoft.HybridCompute/machines/runCommands/read`, `Microsoft.HybridCompute/machines/runCommands/write` | Requires both `-AccessMode Deployment` and `-IncludeGuestRunCommand`; rejected in `ReadOnly` mode. No Run Command delete or cleanup permission. |
 | Source Gallery application | `Microsoft.Compute/galleries/applications/read`, `Microsoft.Compute/galleries/applications/versions/read` | Reuse sufficient grants; otherwise assign Reader only on the named application, inherited by its versions. No version publication or package-storage blob access. |
 | Source resource-group metadata | `Microsoft.Resources/subscriptions/resourceGroups/read` | If missing, create a custom role with **only this action**, scoped and assignable to the source resource group. This is not Reader over all resources in the group. |
 | Agent accessible scope | Separate configuration, not an ARM action granted to the identity | `-AddGalleryResourceGroupToScope` adds the source resource group to managed resources, preserving existing groups and knowledge-graph identity. The target Arc group must already be onboarded. |
@@ -900,14 +926,71 @@ No subscription-wide Contributor is required. The machine administrator role
 used in an existing lab can satisfy the machine actions, but is broader than the
 custom role and is not a new-customer prerequisite. The helper does not grant it.
 
-The script defaults to audit-only; `-Apply` is required for writes and
+The script defaults to audit-only and read-only target permissions; `-Apply`
+is required for access-configuration writes and
 `-WhatIf` suppresses them. It preserves run mode, access level and action
 identity, does not remove existing roles, and refuses to overwrite a different
 custom-role definition. Re-running reuses sufficient assignments rather than
 adding duplicate grants. An existing machine administrator role may already
 cover both requested writes; assigning another role does not solve propagation
 or a wrong-token problem. Reducing an existing broad role is a separate reviewed
-administration task.
+administration task. Selecting `ReadOnly` does not revoke an existing writer
+role: audit and remove previously approved write assignments separately. Earlier
+versions of this helper requested machine application-write by default; that
+behavior now requires explicit `-AccessMode Deployment`.
+
+#### Publishing belongs to VS Code or CI
+
+Use an operator's VS Code Azure CLI session or a dedicated CI publisher identity
+to package, upload and publish new VM Application definitions and versions.
+SRE assesses available versions and proposes work; publishing from VS Code
+does **not** require the SRE identity to hold Gallery write access.
+In this read-only workflow, the operator also performs approved machine
+assignment changes from VS Code. SRE verifies the resulting assignment and
+available inventory/telemetry; it does not run guest commands to prove a current
+installation.
+
+Scope the operator/publisher's Gallery permissions to the intended Gallery or
+application where possible. Depending on whether it creates definitions or only
+versions, the relevant writes are:
+
+```text
+Microsoft.Compute/galleries/applications/write
+Microsoft.Compute/galleries/applications/versions/write
+```
+
+The publisher also needs the corresponding metadata reads and separately
+approved package-storage access. Do not copy its publishing or blob-write roles
+to SRE. The access helper intentionally has no Gallery publishing switches.
+It configures SRE assessment access (or a separately approved machine-only
+deployment exception); it is not a general package-publishing script.
+
+When publishing, approve the exact application, new three-part
+version ID, artifact integrity/signature evidence, install/remove commands,
+replication regions, costs and recovery plan; stop if that version ID already
+exists rather than modifying it. Publishing is not authorization to deploy.
+Use an approved product-specific packaging recipe from the operator terminal;
+the repository does not yet provide a general-purpose version publisher.
+
+For a read-only catalog spanning multiple Galleries, SRE can use a custom reader
+role with only these actions at the approved scope:
+
+```text
+Microsoft.Resources/subscriptions/resourceGroups/read
+Microsoft.Compute/galleries/read
+Microsoft.Compute/galleries/applications/read
+Microsoft.Compute/galleries/applications/versions/read
+```
+
+If reversing an earlier agent-publishing experiment, preserve the required
+catalog reads first, then remove only the exact approved SRE writer assignments.
+For strict read-only operation, remove machine-administrator and Run Command
+writer assignments as well. Do not remove the operator's access, delete Gallery
+versions, change machine assignments or delete a role definition used by another
+identity. An unassigned custom writer-role definition grants no standing access.
+Re-audit the identity's assigned role definitions and verify reads from SRE
+after propagation. Autonomous mode does not grant RBAC; do not authorize an
+on-behalf-of write escalation if the intended workflow is strictly read-only.
 
 **A configured grant is not proof that a 403 is fixed.** The audit checks the
 configured user-assigned action principal, direct/inherited assignments and

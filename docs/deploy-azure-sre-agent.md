@@ -105,15 +105,25 @@ administrator review. Use its explicit `-IncludeGuestRunCommand` variant only
 for approved guest diagnostics. The
 [permissions table](../README.md#required-permissions-and-scopes) lists the exact
 ARM actions and assignment scopes.
-Its helper audits the configured action identity first, creates a narrow machine
-role only if needed, and scopes source-version Reader to one Gallery application.
+Its helper defaults to `-AccessMode ReadOnly`, audits the configured action
+identity first, creates a narrow machine reader role only if needed, and scopes
+source-version Reader to one Gallery application. Existing writer assignments
+are not automatically removed by this setup helper.
 It separately checks parent resource-group metadata read; a child application
 Reader grant and a managed-resource scope entry do not confer that permission.
 The helper grants only the missing group-metadata action through a custom role,
 not Reader on every resource in the source group.
-Guest Run Command and adding the Gallery resource group to managed resources
-are explicit opt-ins, not prerequisites for read-only reports. Keep deployment
-approval and effective-access validation separate from role assignment.
+Adding the Gallery resource group to managed resources is an explicit opt-in.
+Guest Run Command requires a separately approved `-AccessMode Deployment`
+exception plus `-IncludeGuestRunCommand`; it is not a read-only operation.
+Keep deployment approval and effective-access validation separate from role
+assignment.
+
+Publish VM Application definitions and versions from VS Code or CI under a
+separate operator/publisher identity. Do not grant publishing writes to SRE
+for this workflow. See the
+[operator/SRE separation](../README.md#publishing-belongs-to-vs-code-or-ci)
+for role requirements and reversing earlier standing writer grants.
 
 ## Connect this repository to the agent
 

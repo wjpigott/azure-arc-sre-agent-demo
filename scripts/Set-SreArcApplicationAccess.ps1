@@ -12,12 +12,17 @@ param(
     [ValidatePattern("^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/#?]+/providers/Microsoft.Compute/galleries/[^/#?]+/applications/[^/#?]+$")]
     [string]$GalleryApplicationResourceId,
 
+    [ValidateSet("ReadOnly", "Deployment")]
+    [string]$AccessMode = "ReadOnly",
     [switch]$IncludeGuestRunCommand,
     [switch]$AddGalleryResourceGroupToScope,
     [switch]$Apply
 )
 
 $ErrorActionPreference = "Stop"
+if ($IncludeGuestRunCommand -and $AccessMode -eq "ReadOnly") {
+    throw "Run Command write is incompatible with ReadOnly mode. Use a separately approved Deployment mode for guest diagnostics."
+}
 
 function Invoke-AzureJson {
     param([string[]]$Arguments, [switch]$AllowEmptyResponse)
@@ -128,9 +133,11 @@ $galleryInScope = @($managedResources | Where-Object {
 
 $machineActions = @(
     "Microsoft.HybridCompute/machines/read",
-    "Microsoft.HybridCompute/machines/applications/read",
-    "Microsoft.HybridCompute/machines/applications/write"
+    "Microsoft.HybridCompute/machines/applications/read"
 )
+if ($AccessMode -eq "Deployment") {
+    $machineActions += "Microsoft.HybridCompute/machines/applications/write"
+}
 if ($IncludeGuestRunCommand) {
     $machineActions += @(
         "Microsoft.HybridCompute/machines/runCommands/read",
@@ -177,6 +184,7 @@ foreach ($scope in @("/subscriptions/$subscriptionId", $machineGroup, $MachineRe
     TenantId = $account.tenantId
     Mode = $agent.properties.actionConfiguration.mode
     AccessLevel = $agent.properties.actionConfiguration.accessLevel
+    RequestedAccessMode = $AccessMode
     MachineResourceId = $MachineResourceId
     GalleryApplicationResourceId = $GalleryApplicationResourceId
     GalleryResourceGroupInScope = $galleryInScope
@@ -206,13 +214,13 @@ if (-not $galleryInScope -and -not $AddGalleryResourceGroupToScope) {
 
 $rolePlans = @()
 if ($missingMachineActions.Count -gt 0) {
-    $suffix = if ($IncludeGuestRunCommand) { "App and Run Command" } else { "App Assignment" }
+    $suffix = if ($AccessMode -eq "ReadOnly") { "App Reader" } elseif ($IncludeGuestRunCommand) { "App and Run Command" } else { "App Assignment" }
     $rolePlans += @{
         Scope = $MachineResourceId
         AssignableScope = $machineGroup
         Suffix = $suffix
         Actions = $machineActions
-        Description = "VM Application assignment on a selected Arc machine. Run Command is separately opted in."
+        Description = "Explicit Arc application access on one selected machine. Deployment and Run Command writes are separate opt-ins."
     }
 }
 if ($missingGalleryGroupActions.Count -gt 0) {
@@ -301,5 +309,5 @@ if (-not $WhatIfPreference) {
     foreach ($action in $galleryGroupActions) {
         if (-not (Test-AssignedAction $galleryGroupAssignments $action)) { throw "Configured Gallery resource-group permission not verified: $action. Re-audit before retrying." }
     }
-    Write-Information "Configured assignments verified. Effective agent access still requires a new-session read and an explicitly approved guest diagnostic." -InformationAction Continue
+    Write-Information "Configured assignments verified. Verify runtime reads through the agent; publication, deployment and guest diagnostics are separate operations." -InformationAction Continue
 }

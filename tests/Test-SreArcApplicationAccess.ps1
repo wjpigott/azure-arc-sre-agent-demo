@@ -108,7 +108,8 @@ function az {
                 dataActions = $definition.DataActions; notDataActions = $definition.NotDataActions
             })
         }
-        if ($groupRole) { $script:GroupRole = $result } else { $script:Role = $result }
+        if ($groupRole) { $script:GroupRole = $result }
+        else { $script:Role = $result }
     }
     elseif ($command -eq "role assignment create") {
         if ($script:FailWrite) { $global:LASTEXITCODE = 1; return }
@@ -188,7 +189,7 @@ function Assert-Failure {
 Initialize-Fixture
 $audit = Invoke-Helper
 Assert-NoWrite
-if ($audit.ActionPrincipalId -ne $script:Principal -or $audit.MissingConfiguredMachineActions.Count -ne 3) {
+if ($audit.ActionPrincipalId -ne $script:Principal -or $audit.MissingConfiguredMachineActions.Count -ne 2 -or $audit.RequestedAccessMode -ne "ReadOnly") {
     throw "Audit identity or default actions are incorrect."
 }
 
@@ -199,7 +200,7 @@ Assert-NoWrite
 Initialize-Fixture
 Invoke-Helper @{ Apply = $true; Confirm = $false; AddGalleryResourceGroupToScope = $true } | Out-Null
 $actions = $script:Role.permissions[0].actions
-if ($actions.Count -ne 3 -or @($actions | Where-Object { $_ -match "runCommands|delete|\*" }).Count) {
+if ($actions.Count -ne 2 -or @($actions | Where-Object { $_ -match "runCommands|write|delete|\*" }).Count) {
     throw "Default custom role grants unexpected actions."
 }
 if ($script:Assignments.Count -ne 3 -or $script:Agent.properties.actionConfiguration.accessLevel -ne "Low" -or
@@ -213,7 +214,7 @@ Invoke-Helper @{ Apply = $true; Confirm = $false; AddGalleryResourceGroupToScope
 Assert-NoWrite
 
 Initialize-Fixture
-Invoke-Helper @{ Apply = $true; Confirm = $false; IncludeGuestRunCommand = $true; AddGalleryResourceGroupToScope = $true } | Out-Null
+Invoke-Helper @{ AccessMode = "Deployment"; Apply = $true; Confirm = $false; IncludeGuestRunCommand = $true; AddGalleryResourceGroupToScope = $true } | Out-Null
 if ($script:Role.permissions[0].actions.Count -ne 5 -or
     $script:Role.permissions[0].actions -notcontains "Microsoft.HybridCompute/machines/runCommands/write") {
     throw "Guest Run Command opt-in is incorrect."
@@ -221,7 +222,7 @@ if ($script:Role.permissions[0].actions.Count -ne 5 -or
 
 Initialize-Fixture
 Add-ExistingAssignment
-$audit = Invoke-Helper @{ IncludeGuestRunCommand = $true }
+$audit = Invoke-Helper @{ AccessMode = "Deployment"; IncludeGuestRunCommand = $true }
 if ($audit.MissingConfiguredMachineActions.Count -or $audit.MissingConfiguredGalleryActions.Count) { throw "Existing wildcard grants were not recognized." }
 Invoke-Helper @{ Apply = $true; Confirm = $false; AddGalleryResourceGroupToScope = $true } | Out-Null
 if (@($script:Calls | Where-Object { $_ -contains "create" }).Count) { throw "Existing grants were duplicated." }
@@ -229,12 +230,12 @@ if (@($script:Calls | Where-Object { $_ -contains "create" }).Count) { throw "Ex
 Initialize-Fixture
 Add-ExistingAssignment
 $script:Assignments[0].principalId = "wrong-principal"
-if ((Invoke-Helper).MissingConfiguredMachineActions.Count -ne 3) { throw "Wrong-principal assignment was accepted." }
+if ((Invoke-Helper).MissingConfiguredMachineActions.Count -ne 2) { throw "Wrong-principal assignment was accepted." }
 
 Initialize-Fixture
 Add-ExistingAssignment
 $script:NotActions = @("*/write")
-if ((Invoke-Helper).MissingConfiguredMachineActions -notcontains "Microsoft.HybridCompute/machines/applications/write") {
+if ((Invoke-Helper @{ AccessMode = "Deployment" }).MissingConfiguredMachineActions -notcontains "Microsoft.HybridCompute/machines/applications/write") {
     throw "NotActions was ignored."
 }
 
@@ -269,7 +270,7 @@ Assert-NoWrite
 Initialize-Fixture
 Add-ExistingAssignment
 $script:Assignments[0].condition = "administrator review required"
-if ((Invoke-Helper).MissingConfiguredMachineActions.Count -ne 3) { throw "Conditional assignment was accepted as effective access." }
+if ((Invoke-Helper).MissingConfiguredMachineActions.Count -ne 2) { throw "Conditional assignment was accepted as effective access." }
 Assert-Failure { Invoke-Helper @{ Apply = $true; Confirm = $false; AddGalleryResourceGroupToScope = $true } } "Conditional assignments"
 Assert-NoWrite
 
@@ -349,7 +350,31 @@ $script:EmptyRead = $true
 Assert-Failure { Invoke-Helper } "returned no JSON"
 Assert-NoWrite
 
+Initialize-Fixture
+Add-ExistingAssignment
+$audit = Invoke-Helper
+if ($audit.RequestedAccessMode -ne "ReadOnly") { throw "Read-only access must be the default." }
+Assert-NoWrite
+
+Initialize-Fixture
+Assert-Failure { Invoke-Helper @{ IncludeGuestRunCommand = $true } } "incompatible with ReadOnly"
+Assert-NoWrite
+
+foreach ($parameter in @("IncludeGalleryVersionPublishing", "IncludeGalleryApplicationDefinitions", "GalleryPublishingScope")) {
+    Initialize-Fixture
+    Assert-Failure { Invoke-Helper @{ $parameter = $true } } "parameter name '$parameter'"
+    Assert-NoWrite
+}
+
+Initialize-Fixture
+Invoke-Helper @{ AccessMode = "Deployment"; AddGalleryResourceGroupToScope = $true; Apply = $true; Confirm = $false } | Out-Null
+if ($script:Role.permissions[0].actions.Count -ne 3 -or
+    $script:Role.permissions[0].actions -notcontains "Microsoft.HybridCompute/machines/applications/write" -or
+    @($script:Role.permissions[0].actions | Where-Object { $_ -match "runCommands|Microsoft.Compute|Microsoft.Authorization" }).Count) {
+    throw "Explicit deployment mode must grant only the selected machine's application assignment actions."
+}
+
 foreach ($file in $script:JsonFiles) {
     if (Test-Path -LiteralPath $file) { throw "Temporary JSON file was not removed: $file" }
 }
-Write-Output "Passed 28 scoped-access checks and temporary-file cleanup; all Azure commands were mocked."
+Write-Output "Passed read-only defaults, explicit deployment/guest opt-ins, scoped-access and temporary-file cleanup checks; all Azure commands were mocked."
