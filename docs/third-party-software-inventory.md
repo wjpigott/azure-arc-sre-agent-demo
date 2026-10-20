@@ -16,6 +16,14 @@ Use one explicitly approved, connected Arc pilot before expanding collection.
 Resource creation, extension installation, and Log Analytics ingestion can
 incur charges; agree the scope and retention first.
 
+Check guest resource headroom before installing monitoring extensions or
+running updates. For a small Windows demo with AMA, Change Tracking, and AUM,
+4 vCPUs and 8 GB RAM is a practical starting point if the Hyper-V host has
+capacity, not a Microsoft minimum or a guarantee of ingestion. A 2 GB guest
+can have little headroom for these concurrent workloads. Resize through a
+planned shutdown after active installation/extension operations finish;
+additional resources do not repair an invalid workspace log type.
+
 1. **Choose the Arc telemetry workspace.** Record its name, resource group,
    ARM resource ID, and customer ID GUID. Do not select the SRE Agent's
    infrastructure/Application Insights workspace just because the wizard
@@ -93,6 +101,151 @@ You can save all three Live Reports while waiting for initial inventory.
 Record them as **deployed, data validation pending** until reopening/reloading
 shows the expected live results. Use the no-snapshot tracker so demonstration
 fallback data cannot be mistaken for successful collection.
+
+## Windows Arc AMA recovery
+
+Use this only for an explicitly approved Windows Arc pilot with persistent
+missing inventory and evidence of AMA routing/upload failures. A single empty
+query or startup pipe error is not a reason to reinstall an agent.
+
+### Separate collection, handoff, and ingestion
+
+| Evidence | What it establishes |
+| --- | --- |
+| Collector lists applications or patches | Local discovery works; it does not prove delivery. |
+| `Sending software data to output handler` | The collector attempted a handoff, not confirmed workspace ingestion. |
+| Missing `CAgentStream_CloudAgentInfo_AzureMonitorAgent` pipe | AMA's local settings endpoint was unavailable at that timestamp. Correlate with boot and AMA start times. |
+| Missing `CONFIG_CHANGE_BLOB` output stream | A Change Tracking stream was unavailable at that timestamp; inspect current effective configuration rather than adding duplicate rules. |
+| `CONFIG_DATA_BLOB_V2` is not a valid workspace log type | Inventory routing/ingestion rejected the internal type. Investigate AMA and workspace registration; the error alone does not identify which side is faulty. |
+| Old agent-version path or package-consistency warning | Preserve the full message and timestamp, then compare with current executable paths. An old path alone does not prove the current runtime is corrupt. |
+| Extension provisioning `Succeeded` or fresh Heartbeat | Extension deployment or ordinary AMA ingestion works, not necessarily inventory. |
+| Fresh `ConfigurationData` software rows for the pilot | The inventory path is functioning. |
+
+The DCR uses `Microsoft-ConfigurationData` and
+`Microsoft-ConfigurationChange`; do not substitute internal names such as
+`CONFIG_DATA_BLOB_V2`, create custom lookalike tables, or add another Change
+Tracking DCR to bypass an error.
+
+Useful Windows Arc locations:
+
+- Collector and handler logs:
+  `C:\Packages\Plugins\Microsoft.Azure.ChangeTrackingAndInventory.ChangeTracking-Windows\<version>\cta_windows_agent.log`
+  and `cta_windows_handler.log` in the same directory.
+- AMA effective DCR configuration:
+  `C:\Resources\Directory\AMADataStore\mcs\configchunks`.
+- AMA configuration logs:
+  `C:\Resources\Directory\AMADataStore\Configuration`.
+- Extension logs:
+  `C:\ProgramData\GuestConfig\extension_logs`.
+
+Use the installed version rather than assuming a folder name. Preserve relevant
+logs before repair, keep diagnostics outside the repository, and redact
+credentials and environment identifiers before sharing. Compare timestamps with
+their explicit UTC offsets; collector time may differ from the operator's time
+zone. Avoid unbounded TSF conversions or dumping full software payloads into
+Run Command output.
+
+### Controlled AMA-only reinstallation
+
+This interrupts **all AMA-collected telemetry** temporarily. It does not reboot
+the guest or require deleting Change Tracking, DCRs, associations, or workspace
+tables. It is not an AUM patch repair. Coordinate with active maintenance and
+keep the guest running until removal, reinstallation, and verification finish.
+
+The following workstation procedure applies to default Arc system-assigned
+authentication with **no custom public or protected extension settings**. For
+custom proxy/identity settings or secrets, recover the approved deployment
+configuration first: ARM reads do not return protected setting values. Do not
+overwrite such an installation with an empty-settings example.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$subscription = '<subscription-id>'
+$resourceGroup = '<arc-resource-group>'
+$machine = '<arc-machine-name>'
+$machineId = "/subscriptions/$subscription/resourceGroups/$resourceGroup/providers/Microsoft.HybridCompute/machines/$machine"
+$amaUrl = "https://management.azure.com${machineId}/extensions/AzureMonitorWindowsAgent?api-version=2024-07-10"
+$associationsUrl = "https://management.azure.com${machineId}/providers/Microsoft.Insights/dataCollectionRuleAssociations?api-version=2023-03-11"
+$backupBase = Join-Path $env:TEMP ("ama-repair-" + [guid]::NewGuid())
+
+az rest --method get --url $amaUrl --output-file "$backupBase-before.json"
+if ($LASTEXITCODE -ne 0) { throw 'Could not save AMA configuration.' }
+az rest --method get --url $associationsUrl --output-file "$backupBase-associations.json"
+if ($LASTEXITCODE -ne 0) { throw 'Could not save DCR associations.' }
+
+$before = Get-Content -LiteralPath "$backupBase-before.json" -Raw | ConvertFrom-Json
+if ($before.properties.publisher -ne 'Microsoft.Azure.Monitor' -or
+    $before.properties.type -ne 'AzureMonitorWindowsAgent') {
+    throw 'Unexpected extension identity; stop before removal.'
+}
+if ($before.properties.PSObject.Properties.Name -contains 'settings') {
+    throw 'Custom/public settings require reviewing the original deployment first.'
+}
+
+$properties = @{}
+foreach ($key in @('publisher', 'type', 'typeHandlerVersion',
+                   'autoUpgradeMinorVersion', 'enableAutomaticUpgrade')) {
+    $property = $before.properties.PSObject.Properties[$key]
+    if ($null -ne $property) { $properties[$key] = $property.Value }
+}
+@{ location = $before.location; properties = $properties } |
+    ConvertTo-Json -Depth 8 |
+    Set-Content -LiteralPath "$backupBase-reinstall.json" -Encoding ascii
+
+az connectedmachine extension delete `
+    --subscription $subscription --resource-group $resourceGroup `
+    --machine-name $machine --extension-name AzureMonitorWindowsAgent --yes
+if ($LASTEXITCODE -ne 0) { throw 'Removal failed; inspect state before continuing.' }
+
+az rest --method put --url $amaUrl --body "@$backupBase-reinstall.json"
+if ($LASTEXITCODE -ne 0) {
+    throw 'Reinstall request failed; AMA must be explicitly recovered.'
+}
+az rest --method get --url $amaUrl `
+    --query "properties.{state:provisioningState,version:typeHandlerVersion,status:instanceView.status}"
+if ($LASTEXITCODE -ne 0) { throw 'Could not inspect AMA reinstallation.' }
+```
+
+This preserves the installed version and upgrade flags rather than guessing a
+new version. If an upgrade is required, select a supported publisher-approved
+version separately. Do not copy read-only instance-view/status properties into
+a reinstall request. The saved files are private recovery material, not files
+to commit.
+
+Removal and installation are asynchronous and may take several minutes.
+The final GET above is a status snapshot, not a wait or health check. Continue
+checking until the extension succeeds or reports a failure; a successful PUT,
+an absent resource during removal, or `Creating` does not complete the repair.
+Do not assume that an existing DCR association will automatically reinstall a
+deleted AMA extension: explicitly reinstall it as above, or verify that the
+approved onboarding/policy remediation actually ran.
+
+### Validate recovery and know when to escalate
+
+1. Confirm the reinstalled AMA extension succeeds and its processes start from
+   the expected installed location. Do not manually remove old directories or
+   delete `AMADataStore`.
+2. Compare the machine's DCR associations with the saved snapshot. Keep the
+   operational and Change Tracking rules and the intended workspace unchanged.
+3. Verify fresh Heartbeat, effective Change Tracking configuration, and both
+   the settings pipe and the `CAgentStream_ChangeTracking-Windows_*` data pipe.
+   Pipe existence proves availability, not successful delivery.
+4. Check collector and AMA messages **after** the repair timestamp. If a
+   collector needs a separate service restart after AMA is ready, approve and
+   record that action explicitly rather than restarting arbitrary Arc services.
+5. Re-run the [ingestion checks](#verify-actual-ingestion). Scope results to
+   the pilot's exact ARM resource ID and confirm fresh software records.
+   `ingestion_time()` can help distinguish newly received rows from old data.
+   AUM results are separate; do not expect one Change Tracking row per patch.
+6. Record extension recovery and inventory recovery separately. If a fresh
+   AMA installation still rejects `CONFIG_DATA_BLOB_V2` for the correct
+   workspace, preserve timestamped errors, agent versions, DCR IDs, and
+   workspace/table/solution provisioning evidence for Azure Monitor/Change
+   Tracking support. Repeated reinstalls do not repair workspace-side stream
+   registration.
+
+See Microsoft's [AMA installation and management guidance](https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage)
+and [Change Tracking architecture](https://learn.microsoft.com/azure/azure-change-tracking-inventory/overview-monitoring-agent).
 
 ## Validated lab evidence
 

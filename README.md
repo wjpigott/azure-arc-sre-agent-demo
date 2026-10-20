@@ -1010,6 +1010,38 @@ resource through Azure Monitor instead of running this bulk script.
 
 Use the query in [queries/telemetry-ingestion.kql](queries/telemetry-ingestion.kql) in the `<log-analytics-workspace>` workspace. New associations can take several minutes to begin flowing.
 
+### Change Tracking & Inventory readiness and recovery
+
+Software inventory requires **both AMA and the Change Tracking extension**,
+the workspace's **ChangeTracking solution and built-in tables**, and one
+software/inventory-enabled Change Tracking DCR associated with each machine.
+An additional operational telemetry DCR is expected; two DCRs do not mean two
+Change Tracking rules. The telemetry deployment script does not install these
+extensions or enable Change Tracking.
+
+Validate `ConfigurationData` separately from Heartbeat, extension provisioning,
+and Azure Update Manager (AUM). Successful patching does not prove inventory
+ingestion, and an empty inventory table is not evidence that no software is
+installed. See the
+[setup and ingestion checks](docs/third-party-software-inventory.md#first-time-setup-in-a-new-workspace).
+
+For a collector that finds software locally but sends no inventory to Azure:
+
+- Correlate errors with the latest boot and process start times. Historical
+  missing-pipe errors can be transient during AMA startup.
+- A current rejection of `CONFIG_DATA_BLOB_V2` as an invalid workspace log
+  type warrants AMA/ingestion investigation, not another DCR. It does not
+  by itself distinguish a local agent fault from workspace-side registration.
+- With approval, preserve settings and explicitly reinstall **only AMA** using
+  the [Windows Arc recovery procedure](docs/third-party-software-inventory.md#windows-arc-ama-recovery).
+  Leave Change Tracking, the DCRs, and their associations unchanged. Expect a
+  temporary gap in all AMA telemetry; an existing association alone does not
+  guarantee automatic reinstallation.
+- Require fresh `ConfigurationData` rows before calling the repair successful.
+  If the same rejection survives a clean reinstall, retain the evidence and
+  escalate to Azure Monitor/Change Tracking support instead of repeatedly
+  reinstalling agents or deleting caches.
+
 ## SRE agent boundary
 
 Deploy Azure SRE Agent as the primary demo surface. Connect it to the selected Azure resources, Azure Monitor, and Log Analytics using managed identity and RBAC. Start with scheduled tasks, incident investigation, and Live Reports; add custom skills or tools only where product-native capabilities do not cover the scenario.
