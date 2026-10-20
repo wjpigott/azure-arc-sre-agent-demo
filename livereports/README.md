@@ -224,7 +224,7 @@ node .\templates\arc-operations\tests\run-tests.js
 python .\live_report_bundle.py verify "reports/*.livereport.json"
 ```
 
-The builder embeds the script in the nonce-bearing HTML and refreshes bundle
+The builder normalizes source line endings to LF, embeds the script in the nonce-bearing HTML and refreshes bundle
 checksums, byte counts, binding occurrences and descriptions. CI checks source
 parity and regression scenarios for response envelopes, scope isolation, empty
 and failed queries, priority thresholds and section controls. Installation and

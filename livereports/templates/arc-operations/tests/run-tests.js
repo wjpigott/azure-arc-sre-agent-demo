@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const os = require('node:os');
+const {execFileSync} = require('node:child_process');
 
 const root = path.join(__dirname, '..', '..', '..');
 const subscription = '00000000-0000-0000-0000-000000000000';
@@ -164,6 +166,28 @@ async function run(kind, options = {}) {
       }
       checks++;
     }
+  }
+  const buildFixture = fs.mkdtempSync(path.join(os.tmpdir(), 'arc-report-build-'));
+  try {
+    const templates = path.join(buildFixture, 'templates', 'arc-operations');
+    const reports = path.join(buildFixture, 'reports');
+    fs.mkdirSync(templates, {recursive: true});
+    fs.mkdirSync(reports);
+    fs.copyFileSync(path.join(root, 'templates', 'arc-operations', 'build.js'), path.join(templates, 'build.js'));
+    for (const kind of ['arc-fleet-operations', 'arc-priority-lifecycle']) {
+      const file = kind + '-cleaned.livereport.json';
+      fs.copyFileSync(path.join(root, 'reports', file), path.join(reports, file));
+    }
+    for (const ending of ['\n', '\r\n']) {
+      for (const file of ['arc-fleet-operations.html', 'arc-priority-lifecycle.html', 'report.js']) {
+        const source = fs.readFileSync(path.join(root, 'templates', 'arc-operations', file), 'utf8').replace(/\r\n?/g, '\n');
+        fs.writeFileSync(path.join(templates, file), source.replace(/\n/g, ending));
+      }
+      execFileSync(process.execPath, [path.join(templates, 'build.js'), '--check'], {stdio: 'pipe'});
+      checks++;
+    }
+  } finally {
+    fs.rmSync(buildFixture, {recursive: true});
   }
   if (process.argv.includes('--queries-out')) {
     const output = process.argv[process.argv.indexOf('--queries-out') + 1];

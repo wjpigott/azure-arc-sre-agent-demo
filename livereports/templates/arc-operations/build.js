@@ -8,12 +8,15 @@ const reports = [
   ['arc-fleet-operations', 'Live Arc fleet inventory, telemetry coverage, performance, failures, agent versions and priority actions. Rebuilt from currently accessible Azure resources in the selected subscription on every open; no embedded machines or fallback inventory.'],
   ['arc-priority-lifecycle', 'Live Arc priority queue, patch evidence, lifecycle inventory, performance and reliability. Rebuilt from currently accessible Azure resources in the selected subscription on every open; missing evidence is explicitly not assessed.']
 ];
-const script = fs.readFileSync(path.join(__dirname, 'report.js'), 'utf8');
+function readSource(file) {
+  return fs.readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
+}
+const script = readSource(path.join(__dirname, 'report.js'));
 let stale = false;
 for (const [name, description] of reports) {
   const file = path.join(__dirname, '..', '..', 'reports', name + '-cleaned.livereport.json');
   const bundle = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const template = fs.readFileSync(path.join(__dirname, name + '.html'), 'utf8');
+  const template = readSource(path.join(__dirname, name + '.html'));
   if (template.split('__REPORT_SCRIPT__').length !== 2) throw new Error('Expected one script marker in ' + name);
   const html = template.replace('__REPORT_SCRIPT__', () => script);
   const hash = crypto.createHash('sha256').update(html, 'utf8').digest('hex');
