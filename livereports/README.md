@@ -42,8 +42,11 @@ that cannot be installed.
 3. **Access for the agent.** Its managed identity needs **Log Analytics Reader** (or Reader) on the
    workspace or its resource group. Fleet/priority reports also require **Reader**
    on the intended Arc resources for Azure Resource Graph inventory queries.
-4. **The query tool.** The agent must have the built-in tool `system-mcp-monitor_monitor_workspace_log_query`.
-   Every report is read-only and calls only this tool.
+4. **The report-callable query tool.** The agent must expose
+   `system-mcp-monitor_monitor_workspace_log_query` to Live Reports.
+   Every report is read-only and calls only this tool. Do not assume this
+   legacy built-in name is available on every current agent; complete the
+   [runtime compatibility check](#check-runtime-tool-compatibility) first.
 5. **These values from your environment:**
 
 | Value | Where to find it | `--set` name |
@@ -53,6 +56,47 @@ that cannot be installed.
 | Resource group of the workspace | Workspace > Overview > Resource group | `resourceGroup` |
 
 To list the values a bundle needs, run `python3 live_report_bundle.py bindings reports/<file>.livereport.json`.
+
+### Check runtime tool compatibility
+
+Complete the standard Log Analytics and Azure resource onboarding first.
+Before installing the full report set, ask the target agent to list its
+connectors and the exact query tool names returned by `ListConnectorTools`.
+Confirm that the bundle's required tool is report-callable, not just available
+for chat. A successful native Log Analytics chat query, a connected workspace,
+and a saved report on an older agent do not establish compatibility for a new
+`SaveReport` call.
+
+The native connector can appear as `system-mcp-monitor`, rather than the
+display name you gave the Log Analytics connection. A general tool-catalog
+search can return no matches even when `ListConnectorTools` exposes the native
+tool; use the connector listing and actual save result to establish eligibility.
+
+Prepare one bundle using the normal installation procedure below and save it
+without changing its `allowedTools`. Review the tool-access prompt, then check
+the actual `SaveReport` result. Approval alone does not confirm installation.
+If it rejects the required name as an unknown connector tool, stop: the
+unchanged bundles cannot be installed on that runtime. Preserve the exact error
+and the agent's default feature settings for diagnosis. Do not broaden RBAC,
+reinstall machine agents, disable undocumented features, or treat a custom MCP
+server as an established prerequisite to resolve a tool-registration error.
+
+Prefer validating the first report's live queries before installing the
+remaining reports. If the full set is saved before query validation finishes,
+record it as installed but not live-validated; report creation does not prove
+that the data path works.
+
+**Clean-deployment checkpoint (2026-10-20):** a new agent created through the
+standard portal wizard, with default feature settings, the native Log Analytics
+connection, and scoped read access exposed `system-mcp-monitor`. The unchanged
+Fleet bundle was saved as version 1 after tool-access approval, with a
+byte-for-byte match between prepared and saved HTML. No custom MCP server,
+additional hosting, or experimental feature changes were needed. This confirms
+installation compatibility, not end-to-end live validation: the native
+workspace query subsequently returned a timeout after four internal attempts.
+Keep tool availability, report persistence, and query execution as separate
+validation gates. Do not infer a permissions problem or broaden access from a
+timeout alone.
 
 ## Install - Option A: in chat (simplest)
 

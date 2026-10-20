@@ -45,9 +45,9 @@ agent. Record these distinct values privately:
 2. Select **Create agent**.
 3. Set **Subscription** to `<subscription-name>`.
 4. Create resource group `<sre-agent-resource-group>`.
-5. Set **Agent name** to `<sre-agent-name>`.
+5. Set **Agent name** to `<sre-agent-name>`. Use lowercase letters, numbers, and hyphens, and follow the portal's name validation.
 6. Select **Central US** as the region.
-7. Select an available model provider shown for this subscription and region.
+7. Select an available model provider shown for this subscription and region. Review its displayed pricing multiplier rather than assuming the preselected provider has the lowest rate.
 8. Select **Create new** for Application Insights. This monitoring instance is for agent telemetry; it is separate from `<log-analytics-workspace>`.
 9. Review and select **Create**. Provisioning normally takes two to five minutes.
 
@@ -55,6 +55,13 @@ The wizard may create a Log Analytics workspace for Application Insights.
 That workspace holds agent-infrastructure telemetry; it is not automatically
 configured to collect Arc machine data. Connect the workspace actually used by
 the machines' DCRs, even if it is in a different resource group.
+
+Check the subscription again in the creation wizard: its initial selection can
+differ from both the CLI context and the subscription of the agent you just
+opened. For a clean customer-installation test, use a separate resource group
+and leave the new agent's feature settings at their deployment defaults.
+Do not copy experimental settings from an older agent or delete the existing
+agent before the replacement passes validation.
 
 ## Initial least-privilege configuration
 
@@ -79,6 +86,34 @@ and remove unnecessary contributor assignments after verifying the replacement
 read access. Do not grant subscription Contributor to resolve a query failure.
 Review mode and Azure RBAC are separate controls: Review mode does not reduce
 an identity's standing permissions.
+
+The resource and connector setup wizards can also add read roles beyond the
+selected workspace, including resource-group-level Log Analytics Reader,
+Monitoring Reader, Workbook Reader, and Storage Blob Data Reader. Inspect
+assignments after onboarding, not just after agent creation. Keep the scoped
+roles required for this scenario; blob-content access is not required by these
+reports. When tightening wizard grants, remove only identified unnecessary
+assignments and preserve the workspace and Arc resource read access.
+
+## Optional application-pilot permissions
+
+For a separately approved single-machine application pilot, complete the
+[optional scoped-RBAC task](../README.md#optional-task-authorize-a-single-machine-application-pilot).
+That task is the canonical command sequence: set the three resource IDs, run
+the script in audit-only mode, preview with `-Apply -WhatIf`, then apply after
+administrator review. Use its explicit `-IncludeGuestRunCommand` variant only
+for approved guest diagnostics. The
+[permissions table](../README.md#required-permissions-and-scopes) lists the exact
+ARM actions and assignment scopes.
+Its helper audits the configured action identity first, creates a narrow machine
+role only if needed, and scopes source-version Reader to one Gallery application.
+It separately checks parent resource-group metadata read; a child application
+Reader grant and a managed-resource scope entry do not confer that permission.
+The helper grants only the missing group-metadata action through a custom role,
+not Reader on every resource in the source group.
+Guest Run Command and adding the Gallery resource group to managed resources
+are explicit opt-ins, not prerequisites for read-only reports. Keep deployment
+approval and effective-access validation separate from role assignment.
 
 ## Connect this repository to the agent
 

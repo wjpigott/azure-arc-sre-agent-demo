@@ -63,6 +63,21 @@ If a machine already has a version newer than its ring target, do not downgrade 
 - Do not use Run Command as the standard installer. Use it only for approved diagnostics, such as retrieving VM Application stdout/stderr after a failed deployment.
 - Keep SRE Agent in Review mode and do not grant broad contributor access. The first write permission should be a custom role limited to VM Application assignment/update on selected Arc machines.
 
+Complete the [optional single-machine RBAC task](../README.md#optional-task-authorize-a-single-machine-application-pilot)
+before an approved agent-driven pilot. The audit-first helper resolves the
+configured action identity rather than assuming the system-assigned identity.
+It reuses existing sufficient grants, or creates a narrow assignment role on
+the selected machine, and assigns Gallery application Reader only if missing.
+It also checks read access to the source resource group's own metadata and,
+if absent, grants only `Microsoft.Resources/subscriptions/resourceGroups/read`
+through a resource-group-scoped custom role. An application-scoped Reader grant
+does not extend upward to that group. Use the exact application's versions
+endpoint for enumeration, not a whole-resource-group resource listing.
+Run Command read/write is a separate opt-in for approved diagnostics; granting it
+permits arbitrary guest commands, not just software-version reads. A role shown
+in IAM is not proof that a previous 403 has cleared. Compare the actual denied
+caller/action/scope, check propagation and denies, and verify from the agent.
+
 ## Lab prerequisites
 
 | Requirement | Current state or action |
@@ -74,6 +89,7 @@ If a machine already has a version newer than its ring target, do not downgrade 
 | Package source | Use an application version already published through the customer's approved packaging process. |
 | Gallery replication | Publish/replicate the application version to each target Arc machine region, such as West Central US or Central US. |
 | Target | Start with one noncritical, connected x64 Windows Arc machine. |
+| Agent authorization | Complete the [audit, preview and apply commands](../README.md#optional-task-authorize-a-single-machine-application-pilot) for the configured action identity. Verify machine assignment actions, source application/version reads, source resource-group metadata read, and agent managed-resource scope separately. Opt in to Run Command only for approved diagnostics. |
 
 ## First demo: 7-Zip 26.03
 

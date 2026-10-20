@@ -50,6 +50,11 @@ are not proof that a new environment is ready. Use this order:
    extension does not prove live ingestion. Reopen and reload each report,
    check machine counts and freshness, and label validation pending if the
    initial inventory has not arrived.
+8. **Optional: authorize an application pilot.** Before asking the agent to
+   inspect the guest or change VM Application assignments, complete the
+   [role requirements and audit/preview/apply commands](#optional-task-authorize-a-single-machine-application-pilot).
+   Include source resource-group metadata read as well as Gallery application
+   read access; managed-resource scope alone is not an RBAC grant.
 
 **Pilot scope warning:** the current
 [`Deploy-SreTelemetry.ps1`](scripts/Deploy-SreTelemetry.ps1) associates DCRs with
@@ -813,6 +818,164 @@ Deploy `<sre-agent-name>` in `<sre-agent-resource-group>`. Give it a Log Analyti
 See the [first-time setup and GitHub connection instructions](docs/deploy-azure-sre-agent.md)
 before attempting repository-based report installation.
 
+### Optional task: authorize a single-machine application pilot
+
+- [ ] Complete read-only onboarding and Live Report validation first. These
+  reports do **not** require guest Run Command or application-write access.
+- [ ] Before an approved application pilot, audit the SRE Agent's **configured
+  action identity**, target Arc machine, source Gallery application, source
+  resource-group metadata read, and managed resource-group scope using
+  [Set-SreArcApplicationAccess.ps1](scripts/Set-SreArcApplicationAccess.ps1).
+- [ ] Have an administrator compare the principal/object ID in any actual 403
+  with the audit output, review inherited roles and denies, and allow for role
+  propagation before adding permissions.
+- [ ] Review the proposed scopes/actions, optionally apply missing assignments,
+  and verify access from a new agent chat before approving a deployment.
+
+The optional helper requires Azure CLI authentication and explicitly supplied
+resource IDs in **one subscription**. The operator needs resource and RBAC/deny
+read access for the audit. Applying changes additionally requires
+`Microsoft.Authorization/roleAssignments/write` at the assignment scopes,
+`Microsoft.Authorization/roleDefinitions/write` at the custom role's assignable
+resource group if creation is needed, and `Microsoft.App/agents/write` if changing
+the agent's managed-resource scope. Do not give these administration permissions
+to the SRE Agent itself.
+
+From the repository root, set your approved destinations:
+
+```powershell
+$subscriptionId = "<subscription-id>"
+$agentId = "/subscriptions/$subscriptionId/resourceGroups/<agent-rg>/providers/Microsoft.App/agents/<agent-name>"
+$machineId = "/subscriptions/$subscriptionId/resourceGroups/<arc-rg>/providers/Microsoft.HybridCompute/machines/<machine-name>"
+$applicationId = "/subscriptions/$subscriptionId/resourceGroups/<gallery-rg>/providers/Microsoft.Compute/galleries/<gallery-name>/applications/<application-name>"
+$access = @{
+    AgentResourceId = $agentId
+    MachineResourceId = $machineId
+    GalleryApplicationResourceId = $applicationId
+}
+
+# Audit only: no roles, assignments, resource scopes or guest commands are changed.
+.\scripts\Set-SreArcApplicationAccess.ps1 @access
+
+# Preview writes, including the optional Gallery resource-group scope addition.
+.\scripts\Set-SreArcApplicationAccess.ps1 @access `
+    -AddGalleryResourceGroupToScope -Apply -WhatIf
+
+# Run only after administrator review; each proposed change requests confirmation.
+.\scripts\Set-SreArcApplicationAccess.ps1 @access `
+    -AddGalleryResourceGroupToScope -Apply
+```
+
+If a separately approved diagnostic must check the **current guest installation**,
+use this variant of the audit, preview and apply commands:
+
+```powershell
+.\scripts\Set-SreArcApplicationAccess.ps1 @access -IncludeGuestRunCommand
+.\scripts\Set-SreArcApplicationAccess.ps1 @access `
+    -IncludeGuestRunCommand -AddGalleryResourceGroupToScope -Apply -WhatIf
+.\scripts\Set-SreArcApplicationAccess.ps1 @access `
+    -IncludeGuestRunCommand -AddGalleryResourceGroupToScope -Apply
+```
+
+Run Command write grants arbitrary guest command execution capability; RBAC cannot
+restrict the command text to a read-only Chrome version check. The helper itself
+never executes Run Command, installs software, publishes packages or changes a
+VM Application assignment.
+
+#### Required permissions and scopes
+
+Assign the following ARM actions to the **configured user-assigned action
+identity**, not automatically to the agent's separate system-assigned identity.
+The helper resolves and displays the action principal/object ID before changes.
+
+| Access | Required actions | Assignment scope and helper behavior |
+| --- | --- | --- |
+| Target Arc machine | `Microsoft.HybridCompute/machines/read`, `Microsoft.HybridCompute/machines/applications/read`, `Microsoft.HybridCompute/machines/applications/write` | Reuse sufficient grants; otherwise create a custom role assigned to the exact machine and assignable only within its resource group. No delete or extension-management grant. |
+| Optional guest diagnostics | `Microsoft.HybridCompute/machines/runCommands/read`, `Microsoft.HybridCompute/machines/runCommands/write` | Add to the machine role only with `-IncludeGuestRunCommand`. No Run Command delete or cleanup permission. |
+| Source Gallery application | `Microsoft.Compute/galleries/applications/read`, `Microsoft.Compute/galleries/applications/versions/read` | Reuse sufficient grants; otherwise assign Reader only on the named application, inherited by its versions. No version publication or package-storage blob access. |
+| Source resource-group metadata | `Microsoft.Resources/subscriptions/resourceGroups/read` | If missing, create a custom role with **only this action**, scoped and assignable to the source resource group. This is not Reader over all resources in the group. |
+| Agent accessible scope | Separate configuration, not an ARM action granted to the identity | `-AddGalleryResourceGroupToScope` adds the source resource group to managed resources, preserving existing groups and knowledge-graph identity. The target Arc group must already be onboarded. |
+
+No subscription-wide Contributor is required. The machine administrator role
+used in an existing lab can satisfy the machine actions, but is broader than the
+custom role and is not a new-customer prerequisite. The helper does not grant it.
+
+The script defaults to audit-only; `-Apply` is required for writes and
+`-WhatIf` suppresses them. It preserves run mode, access level and action
+identity, does not remove existing roles, and refuses to overwrite a different
+custom-role definition. Re-running reuses sufficient assignments rather than
+adding duplicate grants. An existing machine administrator role may already
+cover both requested writes; assigning another role does not solve propagation
+or a wrong-token problem. Reducing an existing broad role is a separate reviewed
+administration task.
+
+**A configured grant is not proof that a 403 is fixed.** The audit checks the
+configured user-assigned action principal, direct/inherited assignments and
+visible deny assignments at the resource and ancestor scopes. It does not
+impersonate the agent, resolve group/PIM membership, refresh the agent's tokens,
+or prove effective access. An incomplete deny listing or a deny at a relevant
+scope blocks apply pending administrator review. Conditional assignments also
+block apply rather than adding an unconditional grant around them; the helper
+does not remove or bypass these controls.
+
+After applying, wait for role propagation and successful agent provisioning,
+then start a new agent chat. Verify the exact Gallery application/version can
+be read and, only with explicit diagnostic approval, check the guest installation.
+Do not automatically retry a failed application write. If 403 persists, preserve
+the caller object ID, denied action, scope, timestamp and correlation ID for an
+administrator's effective-access check. Reading successfully as the workstation
+administrator does not verify the agent's access. A new chat also does not prove
+the service refreshed its managed-identity token or RBAC cache. Approve the exact target
+version, artifact evidence, replication, maintenance window and recovery plan
+separately before any installation. See the
+[VM Applications workflow](docs/arc-vm-applications-deployment.md).
+
+#### Gallery access remains partial after onboarding
+
+Three separate checks must pass:
+
+1. The source resource group is present in the agent's managed resources.
+2. The action principal can read that **resource group's metadata**. Reader on
+   a child Gallery application does not grant a read on its parent group.
+3. The same principal can read the exact Gallery application and its versions.
+
+The helper now reports `MissingConfiguredGalleryResourceGroupActions` separately
+from `MissingConfiguredGalleryActions`. An earlier live setup passed the child
+application checks but omitted the parent-group permission; adding the group to
+managed resources alone did not fix that missing RBAC action. Re-audit with the
+updated helper and preview/apply only the missing grants. Do not duplicate the
+application Reader grant or switch to subscription Contributor merely because
+the existing grant has not taken effect.
+
+For runtime verification, ask the **agent** to run `az group show` for the source
+group, `az sig gallery-application show` for the exact application, and
+`az sig gallery-application version list` under that application. Supply the
+subscription explicitly and return only names/version metadata. Avoid
+`az resource list --resource-group ...` as a substitute: that enumerates a
+broader resource-group scope and is not the application's versions endpoint.
+If targeted reads still return 403 despite configured grants, stop and retain
+the fresh error evidence for administrator/service investigation rather than
+automatically adding roles or changing identities.
+
+An attached VM Application assignment is desired deployment state, not proof
+of the guest's current Chrome version. Historical Run Command output or stale
+inventory must retain its actual inspection timestamp. Request fresh guest
+verification separately; access repair does not authorize an installation.
+
+Helper validation: run
+`.\tests\Test-SreArcApplicationAccess.ps1` for mocked Azure regression checks.
+Live audit, preview, managed-resource scope addition and a no-change apply rerun
+have been tested. The narrow resource-group metadata role has also been created
+and assigned in a live setup. Machine custom-role creation is covered by the
+mocked checks, not yet a clean-tenant live test. An empty successful ARM
+PATCH response is followed by a read to verify the scope was actually saved.
+After the metadata grant, fresh resource-group, exact-application and application
+version-list reads succeeded through the SRE Agent's own Azure CLI tool.
+The operator also confirmed the corrected access worked in the SRE Agent.
+This verifies those runtime reads, not current guest installation or package
+approval/replication readiness; the precise cause of every earlier child-resource
+denial was not independently established.
+
 ### Live Reports
 
 [livereports/](livereports/) is the source of truth for report definitions and
@@ -830,6 +993,9 @@ and integrity metadata; they are not the portal's static **Download HTML** expor
 Prerequisites: Python 3.8+ for the bundle tool, report-authoring access on the
 target SRE Agent, and **Log Analytics Reader** for its identity on the workspace.
 All bundles allow only `system-mcp-monitor_monitor_workspace_log_query`.
+Verify that the target runtime exposes that exact tool to Live Reports using
+the [compatibility check](livereports/README.md#check-runtime-tool-compatibility);
+native chat-query access alone is not sufficient.
 Fleet/priority reports also need Reader access to the intended Arc resources
 for current Azure Resource Graph inventory.
 Fleet reports need Heartbeat, Perf, and Event; the tracker needs Change Tracking
