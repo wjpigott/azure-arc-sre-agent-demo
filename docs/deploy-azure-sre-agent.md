@@ -168,11 +168,13 @@ installation with this repository, use `codeRefs/<repo>/livereports/reports`
 as the bundle path and `codeRefs/<repo>/livereports/live_report_bundle.py`
 as the script path. Tool-access approval remains manual.
 
-Customize all fleet and priority demo evidence before relying on their
-findings, including static priority actions, maintenance narrative, snapshots,
-and planned-offline exceptions. Address the
-[documented bundle limitations](../livereports/README.md#known-fleet-and-priority-bundle-limitations),
-including the priority report's CSP-blocked section toggles.
+Use the current no-fallback fleet/priority bundles, which rebuild inventory
+from accessible Arc resources in the bound subscription on every open.
+Verify Resource Graph read access, telemetry scope and
+[coverage limits](../livereports/README.md#current-infrastructure-rebuilds-and-coverage-limits).
+If an existing report shows unfamiliar demo names, follow the
+[replacement procedure](../livereports/README.md#replace-an-older-report-that-displays-unfamiliar-demo-machines);
+reloading an old saved version does not replace its embedded data.
 
 Treat these as separate validation gates:
 

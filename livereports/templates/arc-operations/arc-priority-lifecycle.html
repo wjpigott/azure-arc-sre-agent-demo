@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self' 'nonce-{REPORT_NONCE}' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://esm.sh;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+  font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+  img-src 'self' data: blob: https:;
+  connect-src 'self';
+">
+<title>Arc Priority &amp; Lifecycle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style nonce="{REPORT_NONCE}">
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8f9fb;color:#1a1a2e;font-size:13px;line-height:1.5;padding:16px 20px 40px}
+h1{font-size:20px;font-weight:700;color:#0f172a;margin-bottom:2px}
+.subtitle{color:#64748b;font-size:12px;margin-bottom:16px}
+.summary-bar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.stat-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;min-width:120px;text-align:center}
+.stat-card .val{font-size:22px;font-weight:700}
+.stat-card .lbl{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px}
+.stat-card.red .val{color:#dc2626}
+.stat-card.amber .val{color:#d97706}
+.stat-card.green .val{color:#16a34a}
+.stat-card.blue .val{color:#2563eb}
+.stat-card.gray .val{color:#6b7280}
+section{background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:16px;overflow:hidden}
+.sec-head{padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.sec-head h2{font-size:14px;font-weight:600;flex:1}
+.sec-head .badge{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600}
+.sec-head .src{font-size:10px;color:#94a3b8;margin-left:auto;white-space:nowrap}
+.sec-body{padding:16px;overflow-x:auto}
+.sec-body.collapsed{display:none}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f8fafc;text-align:left;padding:8px 10px;font-weight:600;color:#475569;border-bottom:2px solid #e2e8f0;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+tr:hover td{background:#f8fafc}
+.sev{display:inline-block;padding:2px 8px;border-radius:4px;font-weight:600;font-size:11px;text-transform:uppercase}
+.sev-crit{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.sev-high{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
+.sev-warn{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+.sev-info{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
+.sev-ok{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+.sev-offline{background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db}
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500;margin:1px}
+.tag-fail{background:#fef2f2;color:#dc2626}
+.tag-ok{background:#f0fdf4;color:#16a34a}
+.tag-warn{background:#fffbeb;color:#b45309}
+.tag-na{background:#f3f4f6;color:#6b7280}
+.mono{font-family:'SF Mono',Consolas,monospace;font-size:11px}
+.ts{color:#94a3b8;font-size:11px}
+.empty-state{color:#94a3b8;font-style:italic;padding:12px 0;text-align:center}
+.err-state{color:#dc2626;font-style:italic;padding:12px 0;text-align:center}
+.loading-spin{display:inline-block;width:14px;height:14px;border:2px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.truncate{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note{font-size:11px;color:#64748b;margin-top:8px;padding:8px;background:#f8fafc;border-radius:4px;border-left:3px solid #3b82f6}
+.note-warn{border-left-color:#d97706;background:#fffbeb}
+.footer{text-align:center;color:#94a3b8;font-size:11px;margin-top:24px}
+</style>
+</head>
+<body>
+<h1>Arc Priority &amp; Lifecycle</h1>
+<div class="subtitle" id="hdr-sub">Loading dashboard data&hellip;</div>
+<div class="summary-bar" id="summary-bar"></div>
+
+<!-- Section 1: Priority Action Queue -->
+<section>
+  <div class="sec-head" data-section="s1">
+    <h2>1. Priority Action Queue</h2>
+    <span class="badge" id="s1-badge" style="background:#f1f5f9;color:#64748b">loading</span>
+    <span class="src">Sources: Current Azure resources + scoped telemetry</span>
+  </div>
+  <div class="sec-body" id="s1"><div><span class="loading-spin"></span> Analysing fleet&hellip;</div></div>
+</section>
+
+<!-- Section 2: Patch & Maintenance Readiness -->
+<section>
+  <div class="sec-head" data-section="s2">
+    <h2>2. Patch &amp; Maintenance Readiness</h2>
+    <span class="badge" id="s2-badge" style="background:#f1f5f9;color:#64748b">loading</span>
+    <span class="src">Source: Current Azure Update Manager evidence</span>
+  </div>
+  <div class="sec-body" id="s2"><div><span class="loading-spin"></span> Loading patch data&hellip;</div></div>
+</section>
+
+<!-- Section 3: Lifecycle & Currency -->
+<section>
+  <div class="sec-head" data-section="s3">
+    <h2>3. Lifecycle &amp; Currency</h2>
+    <span class="badge" id="s3-badge" style="background:#f1f5f9;color:#64748b">loading</span>
+    <span class="src">Source: Current Azure Resource Graph inventory</span>
+  </div>
+  <div class="sec-body" id="s3"><div><span class="loading-spin"></span> Loading lifecycle data&hellip;</div></div>
+</section>
+
+<!-- Section 4: Performance & Capacity -->
+<section>
+  <div class="sec-head" data-section="s4">
+    <h2>4. Performance &amp; Capacity</h2>
+    <span class="badge" id="s4-badge" style="background:#f1f5f9;color:#64748b">loading</span>
+    <span class="src">Source: Live KQL (last 24h)</span>
+  </div>
+  <div class="sec-body" id="s4"><div><span class="loading-spin"></span> Querying performance data&hellip;</div></div>
+</section>
+
+<!-- Section 5: Reliability & Configuration -->
+<section>
+  <div class="sec-head" data-section="s5">
+    <h2>5. Reliability &amp; Configuration</h2>
+    <span class="badge" id="s5-badge" style="background:#f1f5f9;color:#64748b">loading</span>
+    <span class="src">Source: Live KQL (last 48h)</span>
+  </div>
+  <div class="sec-body" id="s5"><div><span class="loading-spin"></span> Querying events&hellip;</div></div>
+</section>
+
+<div class="footer" id="footer"></div>
+
+<script nonce="{REPORT_NONCE}">__REPORT_SCRIPT__</script>
+</body>
+</html>

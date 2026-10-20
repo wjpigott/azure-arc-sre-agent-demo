@@ -712,6 +712,101 @@ for governance over other tools and external actions.
 See [Run modes in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/run-modes)
 and [Manage permissions for Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/manage-permissions).
 
+#### Set the SRE Agent default mode to Autonomous
+
+The default is stored in Azure on the `Microsoft.App/agents` resource as
+`properties.actionConfiguration.mode`; it is not a repository configuration
+file or a subscription-wide setting. Changing it does not change Azure RBAC,
+the action access level, or tool access policies. A task or response plan with
+an explicit mode can override this fallback. To change a specific task or
+response plan, edit its **Agent autonomy level** in the SRE Agent UI.
+
+**The command that saves the change is `az rest --method patch`**, shown in
+the second PowerShell block below. Its JSON body sets the following property
+(and also includes the existing action identity and access level to preserve
+them):
+
+```json
+{
+  "properties": {
+    "actionConfiguration": {
+      "mode": "Autonomous"
+    }
+  }
+}
+```
+
+The first block sets `$mode = "Autonomous"` and reads the current action
+configuration. In the second block, `$configuration.mode = $mode` sets
+`properties.actionConfiguration.mode` to `Autonomous` in the PATCH body.
+The final `az resource show --query` command only verifies the result; it
+does not change the mode. Run both PowerShell blocks in the same session.
+
+For a trusted nonproduction agent, use the following PowerShell procedure to
+change the default to `Autonomous`. Set the destination explicitly and confirm
+the agent before applying the change:
+
+```powershell
+$subscriptionId = "<subscription-id>"
+$resourceGroup = "<sre-agent-resource-group>"
+$agentName = "<sre-agent-name>"
+$mode = "Autonomous" # Use "Review" to restore approval pauses.
+$agentId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.App/agents/$agentName"
+$apiVersion = "2026-01-01"
+
+az account show --subscription $subscriptionId `
+  --query "{subscription:name,subscriptionId:id,tenantId:tenantId}" --output json
+if ($LASTEXITCODE -ne 0) { throw "Unable to verify the subscription." }
+
+$configurationJson = az resource show --ids $agentId --api-version $apiVersion `
+  --query properties.actionConfiguration --output json
+if ($LASTEXITCODE -ne 0) { throw "Unable to read the agent configuration." }
+$configuration = $configurationJson | ConvertFrom-Json
+if ($null -eq $configuration) { throw "The agent has no action configuration." }
+$configuration | Format-List
+```
+
+After confirming the destination and existing configuration, apply a narrow
+PATCH that preserves the current action identity and access level:
+
+```powershell
+$configuration.mode = $mode
+$patch = @{
+  properties = @{
+    actionConfiguration = $configuration
+  }
+} | ConvertTo-Json -Depth 10
+$patchFile = [System.IO.Path]::GetTempFileName()
+try {
+  [System.IO.File]::WriteAllText($patchFile, $patch)
+  az rest --method patch `
+    --url "https://management.azure.com$agentId`?api-version=$apiVersion" `
+    --body "@$patchFile" --output none
+  if ($LASTEXITCODE -ne 0) { throw "Unable to update the agent run mode." }
+}
+finally {
+  Remove-Item -LiteralPath $patchFile
+}
+
+az resource show --ids $agentId --api-version $apiVersion `
+  --query "{name:name,mode:properties.actionConfiguration.mode,accessLevel:properties.actionConfiguration.accessLevel,provisioningState:properties.provisioningState,runningState:properties.runningState}" `
+  --output json
+if ($LASTEXITCODE -ne 0) { throw "Unable to verify the agent run mode." }
+```
+
+Verify that `mode` matches the requested value, `provisioningState` reaches
+`Succeeded`, and `runningState` is `Running`. If provisioning is still
+`InProgress`, repeat the final read until it completes; a successful PATCH
+request alone does not prove provisioning finished. To roll back, set `$mode`
+to `Review` and repeat the procedure, reading the current configuration again.
+
+Use this targeted PATCH rather than `az resource update --set` for this
+change. In the tested deployment, the generic update resubmitted an
+Application Insights configuration whose connection string was not returned
+by the read API, causing `InvalidApplicationInsightsConfiguration` ("The
+AppId and ConnectionString fields must be provided together"). The narrow
+PATCH avoids resubmitting unrelated settings.
+
 ## Azure SRE Agent setup
 
 Deploy `<sre-agent-name>` in `<sre-agent-resource-group>`. Give it a Log Analytics connector for `<log-analytics-workspace>` and read access to the intended Arc scope.
@@ -731,11 +826,12 @@ and integrity metadata; they are not the portal's static **Download HTML** expor
 | [Arc Fleet Operations](livereports/reports/arc-fleet-operations-cleaned.livereport.json) | Fleet inventory, telemetry coverage, resource pressure, failures, agent versions, and priority actions. |
 | [Arc Priority & Lifecycle](livereports/reports/arc-priority-lifecycle-cleaned.livereport.json) | Priority queue, patch/maintenance readiness, lifecycle, performance, and reliability. |
 | [Third-Party Software Update Tracker](livereports/reports/third-party-software-update-tracker-cleaned.livereport.json) | Windows application versions compared with a dated vendor-latest reference; no embedded inventory. Recommended for new environments. |
-| [Tracker with demo snapshot](livereports/reports/third-party-software-update-tracker-demo-snapshot-cleaned.livereport.json) | The tracker with a pseudonymized fallback snapshot when the live query fails. |
 
 Prerequisites: Python 3.8+ for the bundle tool, report-authoring access on the
 target SRE Agent, and **Log Analytics Reader** for its identity on the workspace.
 All bundles allow only `system-mcp-monitor_monitor_workspace_log_query`.
+Fleet/priority reports also need Reader access to the intended Arc resources
+for current Azure Resource Graph inventory.
 Fleet reports need Heartbeat, Perf, and Event; the tracker needs Change Tracking
 `ConfigurationData`. Check inventory coverage with the
 [coverage query](livereports/templates/third-party-software-tracker/queries/inventory-coverage.kql).
@@ -776,21 +872,25 @@ Choose an installation path:
 
 Review and approve the tool-access prompt for each report. Open it from
 **Live Reports**, then select **Reload** to verify live data. For trackers,
-require **Data: LIVE**; **SNAPSHOT** is fallback data, not successful live access.
+require **Data: LIVE**; **UNAVAILABLE** is not successful live access.
 Use `--report-id <existing-id>` for an intentional new version, rather than
 creating duplicates or overwriting another environment's report.
 
-**Customize fleet data before relying on findings.** The fleet and priority
-bundles include pseudonymized machine lists and point-in-time Azure resource
-snapshots. Replace those constants, planned-offline exceptions, and snapshot
-timestamps with the intended environment as described in the deployment guide.
-A freshly rendered page does not make embedded resource evidence current.
-The current fleet/priority bundles also contain demonstration narrative and
-priority actions; the priority bundle has inline section-toggle handlers that
-require correction for nonce CSP. Read the
-[known limitations and required customization](livereports/README.md#known-fleet-and-priority-bundle-limitations)
-before using either report operationally. These documentation updates do not
-change the published bundle HTML or automate its customization.
+**Reports rebuild from current infrastructure, with no demo fleet fallback.**
+Fleet and priority bundles discover accessible Arc resources in the selected
+subscription on every open/reload and filter telemetry to those exact ARM
+resource IDs. They no longer contain pseudonymized machine lists, saved
+maintenance failures, demonstration findings or planned-offline exceptions.
+Missing evidence is unavailable/not assessed, not compliant. Read the
+[scope and coverage limits](livereports/README.md#current-infrastructure-rebuilds-and-coverage-limits)
+before operational use.
+
+**Existing installed reports must be updated.** A repository update or browser
+reload cannot replace an old saved report's embedded data. Follow the
+[replacement procedure](livereports/README.md#replace-an-older-report-that-displays-unfamiliar-demo-machines)
+to save a new version of the existing report ID, then verify the current
+version against the intended subscription. The optional demo-snapshot tracker
+bundle was removed; replace it with the no-snapshot tracker.
 
 The tracker is read-only, not a software installer. Its dated vendor-latest
 reference is separate from the approved ring targets in
@@ -918,7 +1018,7 @@ Keep the agent read-only and in **Review** mode initially. Do not grant arbitrar
 
 ## Next steps
 
-1. Install or update the required [Live Report bundles](livereports/README.md), customize fleet snapshots for the intended environment, and validate each section against its source data. Use `--name-prefix "Test - "` for deployment-validation reports.
+1. Install or update the required [Live Report bundles](livereports/README.md), bind the intended subscription/workspace, and validate the rebuilt current inventory and each section against its source data. Use `--name-prefix "Test - "` for deployment-validation reports.
 2. Create the first scheduled task: `Arc Fleet Daily Health`, retaining results in the agent portal during the validation period.
 3. Add the approved Arc agent version baseline, deployment rings, support horizon, and exception registry to this repository.
 4. Add an Azure Monitor health model and alert that opens a read-only agent investigation for fleet degradation.

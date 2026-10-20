@@ -4,7 +4,8 @@ This folder holds the current Live Report definitions for the
 [Azure Arc SRE Agent Demo](../README.md). Each one is a
 portable `*.livereport.json` bundle. The bundles contain no environment-specific data:
 - Subscription, workspace and resource group are `__PLACEHOLDER__`s that you fill in at install time.
-- Machine names in the built-in demo data are pseudonyms such as `WIN-SRV-01`.
+- There is no embedded machine inventory or demo fallback. Fleet and priority
+  reports query current Azure resources on every open; the tracker queries live software inventory.
 
 A bundle carries the report's saved source (HTML, CSS, JS, CSP) byte-for-byte, so the layout after install
 is the same as the original. It is **not** the portal's "Download HTML" file, which is a static snapshot
@@ -18,14 +19,14 @@ that cannot be installed.
 | `live_report_bundle.py` | Install, verify and export tool. Python 3.8+, standard library only. |
 | `livereport-bundle.schema.json` | JSON Schema of the bundle format (`sreagent.livereport/v1`). |
 | `templates/third-party-software-tracker/` | Editable source of the tracker, with KQL queries and offline tests. |
-| [`../.github/workflows/validate-live-reports.yml`](../.github/workflows/validate-live-reports.yml) | Repository CI. Verifies bundles, blocks real IDs or GUIDs, and runs the template tests. |
+| `templates/arc-operations/` | Editable fleet/priority layouts, shared live-query logic, bundle builder and regression tests. |
+| [`../.github/workflows/validate-live-reports.yml`](../.github/workflows/validate-live-reports.yml) | Repository CI. Verifies bundles, blocks real IDs or GUIDs, checks generated source, and runs the template tests. |
 
 | Bundle | Report |
 |---|---|
 | `arc-fleet-operations-cleaned` | Fleet inventory, telemetry coverage, resource pressure, failures, agent versions and priority actions. |
 | `arc-priority-lifecycle-cleaned` | Priority action queue, patch and maintenance readiness, lifecycle, performance and reliability. |
 | `third-party-software-update-tracker-cleaned` | Third-party app versions compared with vendor latest. No built-in data. Recommended for new environments. |
-| `third-party-software-update-tracker-demo-snapshot-cleaned` | The same tracker with a pseudonymized demo snapshot, shown only if the live query fails. |
 
 ## Prerequisites
 
@@ -39,7 +40,8 @@ that cannot be installed.
      Use the Arc telemetry workspace, not automatically the workspace created
      for the SRE Agent's Application Insights.
 3. **Access for the agent.** Its managed identity needs **Log Analytics Reader** (or Reader) on the
-   workspace or its resource group.
+   workspace or its resource group. Fleet/priority reports also require **Reader**
+   on the intended Arc resources for Azure Resource Graph inventory queries.
 4. **The query tool.** The agent must have the built-in tool `system-mcp-monitor_monitor_workspace_log_query`.
    Every report is read-only and calls only this tool.
 5. **These values from your environment:**
@@ -123,14 +125,52 @@ Pass the existing report ID, so a new **version** is saved instead of a second r
   (one bundle at a time).
 - Scripted: add `--report-id <id>` to `install`.
 
+### Replace an older report that displays unfamiliar demo machines
+
+Older fleet and priority bundles contained pseudonymized sample names such as
+`WIN-SRV-07`, plus saved patch, extension, SQL and maintenance findings. Those
+names were embedded demo data, not evidence of access to another network.
+The former optional tracker demo-snapshot bundle has also been removed.
+
+**Updating this repository does not update an installed report.** Reloading an
+old version still executes its old saved HTML. For each affected installed report:
+
+1. Connect or refresh the repository in the target agent so it can read the
+   updated bundles, or attach the current bundle and deployment tool.
+2. List reports and confirm the existing report ID, destination subscription,
+   and telemetry workspace. Use the fleet/priority bundle matching that report;
+   replace a demo-snapshot tracker with `third-party-software-update-tracker-cleaned`.
+3. Prepare one report at a time, preserving its existing ID. For example, from
+   the repository root in PowerShell:
+
+   ```powershell
+   py -3 .\livereports\live_report_bundle.py prepare `
+     .\livereports\reports\arc-priority-lifecycle-cleaned.livereport.json `
+     --set "subscription=<subscription-id>" `
+     --set "workspace=<workspace-customer-id>" `
+     --set "resourceGroup=<workspace-resource-group>" `
+     --report-id "<existing-report-id>" --drop-suffix " - Cleaned" `
+     --out-dir .\Temp\livereport-install
+   ```
+
+4. Ask the target agent to call **SaveReport** with the HTML, existing report ID
+   and other fields from the generated install plan, without regenerating the
+   HTML or inserting example machines. Approve tool access if requested.
+5. Open the newly saved **current version**, reload, and compare its machine
+   names and count with accessible Arc resources in the selected subscription.
+   Check a query-failure case: it must show unavailable/not assessed, never a
+   demo fleet. If Resource Graph returns no accessible inventory, verify scope
+   and permissions rather than filling in guessed names.
+
 ## After installing - check it works
 
 - The report opens without a red error box.
-- **Trackers:** the header shows **Data: LIVE**. *Data: SNAPSHOT* means the live query failed and the demo
-  snapshot is showing. *Data: UNAVAILABLE* means the query failed and the report has no snapshot. The
-  banner gives the reason in both cases.
-- **Fleet and priority reports:** the machine counts match your environment. See "Customizing the demo
-  data" below.
+- **Tracker:** the header shows **Data: LIVE**. *Data: UNAVAILABLE* means the query
+  failed or inventory is unavailable; no demo snapshot should be displayed.
+- **Fleet and priority reports:** names and machine counts match current accessible
+  Arc resources in the bound subscription. The workspace/resource-group bindings
+  select telemetry, not an Arc resource-group filter. Verify that this
+  subscription-wide inventory scope is intended.
 - Check timestamps and test section expand/collapse controls, not just whether
   the report opens. A successful save, bundle checksum, or extension deployment
   is not proof of live data or working browser interactions.
@@ -138,60 +178,57 @@ Pass the existing report ID, so a new **version** is saved instead of a second r
   It is valid to save the three reports first and validate later, but empty
   results must not be reported as proof of compliance or no installed software.
 
-## Customizing the demo data
+## Current infrastructure rebuilds and coverage limits
 
-The fleet and priority reports combine live Log Analytics queries with a built-in machine list. In the
-cleaned bundles that list holds pseudonymized demo machines (`WIN-SRV-NN`, `LNX-SRV-NN`). Until you replace
-it with your own machines, they will show as missing or offline.
+Fleet and priority reports use the existing read-only Log Analytics query tool
+with [Azure Resource Graph cross-service queries](https://learn.microsoft.com/azure/azure-monitor/logs/azure-monitor-data-explorer-proxy#query-data-in-azure-resource-graph-by-using-arg-preview):
 
-| Report | Built-in constants to edit |
-|---|---|
-| Fleet Operations | `FLEET` (name, os, agent, rg), `PLANNED_OFFLINE`, static card text, and standing demonstration priority actions |
-| Priority & Lifecycle | `MACHINES`, `FAILED_EXTS`, `SQL_INSTANCES`, `PATCH_ASSESS`, `MAINT`, `PLANNED_OFFLINE`, `ARG_TS` (snapshot date), visible source timestamps, maintenance/reboot narrative, and the dated agent reference |
-| Tracker (Demo Snapshot) | `SNAPSHOT`, `SNAP_T` and `SNAPSHOT_TAKEN` (fallback only; can be emptied) |
+- On each open/reload, `arg("").Resources` discovers currently accessible
+  `Microsoft.HybridCompute/machines` in the bound subscription. There is no
+  saved fleet manifest, planned-offline list, standing demo action or fallback.
+- All Heartbeat, Perf, Event, Syslog and ConfigurationChange queries are filtered
+  to those exact current ARM resource IDs. Hostname-only matching is not used:
+  duplicate short names, FQDNs, unrelated workspace hosts and deleted resources
+  cannot add machines to the report.
+- Extensions, SQL inventory, patch assessments and patch installation runs are
+  queried from current Resource Graph records and matched back to the same
+  resource IDs. Unavailable queries are labeled explicitly; empty records do
+  not establish coverage or compliance.
+- Arc connection state comes from current resource properties, not AMA
+  heartbeat age. Missing heartbeats do not establish a missing DCR.
+- Planned-offline exceptions, maintenance schedules, assessment freshness,
+  lifecycle support, ESU entitlement and reboot debt are **not assessed**.
+  Observed version strings are not labeled current/unsupported using an old
+  hardcoded vendor reference. Review these separately against approved policy.
+- Resource Graph returns only resources the identity can read, may lag ARM
+  changes, and can obscure cross-service errors. An empty inventory is shown
+  as unavailable/not assessed. A query reaching 1,000 records is rejected
+  rather than presenting a truncated fleet as complete. Use a narrower
+  deployment scope or extend pagination before operational use at that size.
+- All telemetry is limited to the selected workspace. Records lacking a
+  matching `_ResourceId` are excluded, even if their computer name matches.
 
-Customize before operational use. Ask the agent:
-> Prepare the fleet and priority reports for only my approved Arc scope. Query
-> current resource evidence and replace the constants listed above. Remove
-> standing demo priority actions and old maintenance/reboot narrative; replace
-> them only with verified destination evidence. If patch, maintenance or SQL
-> evidence is unavailable, say unknown/not assessed, not compliant. Update
-> visible timestamps and planned-offline card text. Preserve layout, nonce,
-> tool-response decoding and FQDN matching. Use nonce-safe listeners for section
-> controls. Re-export and verify any modified bundle before preparing it. If
-> updating an installed report, save a new version of its existing report ID.
+The tracker also has no fallback inventory; it still requires live Change
+Tracking data and review of its dated vendor reference.
 
-The tracker without built-in data (`third-party-software-update-tracker-cleaned`) needs no
-fleet-snapshot customization; it still needs environment bindings, live inventory,
-and review of its dated vendor reference.
+### Editing and rebuilding the fleet/priority bundles
 
-## Known fleet and priority bundle limitations
+Edit `templates/arc-operations/arc-fleet-operations.html`,
+`arc-priority-lifecycle.html` and the shared `report.js`, then run from
+`livereports/`:
 
-The current published bundles are portable **demo definitions**, not a fully
-automated clean-tenant bootstrap. Binding subscription/workspace/resource group
-does not replace all embedded evidence.
+```powershell
+node .\templates\arc-operations\build.js
+node .\templates\arc-operations\build.js --check
+node .\templates\arc-operations\tests\run-tests.js
+python .\live_report_bundle.py verify "reports/*.livereport.json"
+```
 
-- **Fleet:** standing actions include old machine-specific lifecycle findings,
-  patch-coverage counts, and a fixed missing-DCR count. Remove or rebuild these
-  for the destination. The dynamic phrase "no AMA heartbeat - missing DCR"
-  also overstates the evidence: missing heartbeat alone cannot establish the
-  cause. Verify extensions, DCR associations, destination, and ingestion before
-  claiming a missing DCR.
-- **Priority:** old maintenance failures and reboot-status narrative remain
-  outside the snapshot constants. Replace them as well; clearing `MAINT` or
-  `PATCH_ASSESS` alone is insufficient.
-- **Priority controls:** five inline `onclick` section handlers conflict with
-  the report's nonce CSP. Replace them with `data-*` attributes and
-  `addEventListener` calls inside the existing nonce-bearing script; do not
-  weaken CSP or remove `{REPORT_NONCE}`. Verify the controls after saving.
-- The bundles already include tool-response envelope decoding and normalized
-  short-host/FQDN matching. Preserve these when customizing.
-
-These limitations were corrected in private, destination-specific copies
-during deployment. Those copies contain environment data and are not the
-public bundles. The documentation does not imply the public HTML is fixed.
-Current CI verifies integrity, placeholders and tracker logic; it does not
-prove fleet/priority narrative correctness or browser interaction behavior.
+The builder embeds the script in the nonce-bearing HTML and refreshes bundle
+checksums, byte counts, binding occurrences and descriptions. CI checks source
+parity and regression scenarios for response envelopes, scope isolation, empty
+and failed queries, priority thresholds and section controls. Installation and
+runtime validation in the destination agent remain separate steps.
 
 ## Verify bundles before installing or merging
 
@@ -224,6 +261,11 @@ Do these steps inside your SRE Agent workspace.
    It fails if any original value survives or if the report's JavaScript no longer parses. Report names get " - Cleaned".
 5. Review the diff, run `verify`, and open a pull request. CI runs the same checks.
 
+Sanitizing identifiers is not enough to make a report operationally portable:
+pseudonymized machines are still sample data. Do not publish embedded
+environment snapshots or fallback fleets. Replace them with scoped live queries
+and explicit unavailable states, as in the current fleet/priority source.
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -236,7 +278,8 @@ Do these steps inside your SRE Agent workspace.
 | Repository path is missing under `codeRefs` | Connect the repository inside the SRE Agent, not just VS Code; verify authentication, repository selection, and clone/index readiness. |
 | OAuth cannot complete in VS Code's integrated browser | Try the external browser or the supported PAT connection option. Follow the agent setup guide; never paste the token into chat. |
 | Fresh workspace has no `ConfigurationData` | Complete Change Tracking solution/table, extension and DCR setup, then allow for the configured collection interval. |
-| Fleet reports missing DCRs despite fresh telemetry | Check demo standing actions and actual DCR associations; missing heartbeat is not proof of missing DCR. |
-| Priority sections do not expand/collapse | Replace CSP-blocked inline handlers with nonce-safe event listeners and re-export the source. |
+| Report shows unfamiliar demo machine names | Replace the installed report's current version using the updated no-fallback bundle; reloading old HTML does not remove embedded data. |
+| Fleet reports missing DCRs despite fresh telemetry | Upgrade the old report and inspect actual DCR associations; current bundles do not infer missing DCRs from heartbeat alone. |
+| Priority sections do not expand/collapse | Upgrade to the current bundle with nonce-safe click/keyboard listeners, then verify the current saved version. |
 | `install` returns 401 | The token must have audience `https://azuresre.dev`, and you need thread-write access on the agent. |
 | Everything in the tracker is "outdated" | The reference versions are stale. See the template README for how to update them. |

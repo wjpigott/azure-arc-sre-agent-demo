@@ -43,9 +43,10 @@ jobs:
               need = {x['value'] for x in b.get('bindings', []) if x.get('required')}
               missing = [p for p in need if p not in h]
               guids = re.findall(r'\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b', h)
-              if not need or missing or guids or b['metadata'].get('sourceAgent'):
+              demo_hosts = re.findall(r'\b(?:WIN|LNX)-SRV-\d+\b', h)
+              if not need or missing or guids or demo_hosts or b['metadata'].get('sourceAgent'):
                   bad += 1
-                  print('FAIL', f, 'placeholders missing:', missing, 'GUIDs:', guids[:3])
+                  print('FAIL', f, 'placeholders missing:', missing, 'GUIDs:', guids[:3], 'demo hosts:', demo_hosts[:3])
               else:
                   print('OK  ', f)
           sys.exit(1 if bad else 0)
@@ -54,6 +55,11 @@ jobs:
       - name: Template tests
         working-directory: livereports/templates/third-party-software-tracker
         run: node tests/run-tests.js
+
+      - name: Arc reports use current scoped infrastructure without demo fallback
+        run: |
+          node templates/arc-operations/build.js --check
+          node templates/arc-operations/tests/run-tests.js
 
       - name: Template keeps CONFIG placeholders and an empty snapshot
         run: |
