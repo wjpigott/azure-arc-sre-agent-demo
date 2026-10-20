@@ -1042,6 +1042,11 @@ For a collector that finds software locally but sends no inventory to Azure:
   escalate to Azure Monitor/Change Tracking support instead of repeatedly
   reinstalling agents or deleting caches.
 
+The [recorded AMA recovery checkpoint](docs/third-party-software-inventory.md#2026-10-20-ama-recovery-checkpoint)
+distinguishes restored Heartbeat from still-unverified inventory and documents
+a collector stop failure. Do not treat this procedure as a proven fix for every
+invalid-log-type error.
+
 ## SRE agent boundary
 
 Deploy Azure SRE Agent as the primary demo surface. Connect it to the selected Azure resources, Azure Monitor, and Log Analytics using managed identity and RBAC. Start with scheduled tasks, incident investigation, and Live Reports; add custom skills or tools only where product-native capabilities do not cover the scenario.

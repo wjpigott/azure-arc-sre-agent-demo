@@ -243,6 +243,11 @@ accompany an execution timeout.
 4. Check collector and AMA messages **after** the repair timestamp. If a
    collector needs a separate service restart after AMA is ready, approve and
    record that action explicitly rather than restarting arbitrary Arc services.
+   Inspect `Get-Service change_tracking_service` status and `CanStop` first.
+   If stopping fails, inspect the final service state instead of retrying with
+   force or killing processes. If fully stopped, restore the same collector
+   service to Running; if it is pending, capture the error and plan an approved
+   graceful guest restart rather than forcing termination.
 5. Re-run the [ingestion checks](#verify-actual-ingestion). Scope results to
    the pilot's exact ARM resource ID and confirm fresh software records.
    `ingestion_time()` can help distinguish newly received rows from old data.
@@ -258,6 +263,31 @@ See Microsoft's [AMA installation and management guidance](https://learn.microso
 and [Change Tracking architecture](https://learn.microsoft.com/azure/azure-change-tracking-inventory/overview-monitoring-agent).
 
 ## Validated lab evidence
+
+### 2026-10-20: AMA recovery checkpoint
+
+On a Windows Arc pilot with 2 GB RAM, an explicit AMA-only reinstall preserved
+handler version `1.45.0.0`, the original automatic-upgrade settings, and both
+operational and Change Tracking DCR associations. Azure eventually reported
+provisioning success. Local checks confirmed new `MonAgent*` processes under
+the installed version and both required AMA pipes, followed by fresh workspace
+Heartbeat records.
+
+At that checkpoint, `ConfigurationData` and `ConfigurationChange` still had
+no rows. This establishes **AMA recovery, not a confirmed inventory repair**
+or proof that the previously quoted invalid-log-type error was resolved.
+A subsequent targeted collector restart reported `StopServiceFailed`; no
+forced termination was attempted. Treat its final service state as a separate
+verification, not a successful restart.
+
+The same investigation demonstrated why short diagnostic timeouts can mislead:
+a 90-second Run Command returned only its initial timestamp before execution
+timed out. Allow a bounded window that covers PowerShell startup and the actual
+operation on the guest, and inspect execution state and exit code separately
+from ARM provisioning. Longer timeouts or additional RAM are not proof of
+successful inventory ingestion.
+
+### Earlier inventory evidence
 
 On 2026-09-01, `<canary-machine>` reported Python 3.13.12 through `ConfigurationData` software inventory. This proves the basic third-party inventory scenario is available without a new agent or connector.
 
