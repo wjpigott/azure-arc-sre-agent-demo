@@ -1022,7 +1022,9 @@ extensions or enable Change Tracking.
 Validate `ConfigurationData` separately from Heartbeat, extension provisioning,
 and Azure Update Manager (AUM). Successful patching does not prove inventory
 ingestion, and an empty inventory table is not evidence that no software is
-installed. See the
+installed. Inventory snapshot cycles are also distinct from ordinary software
+change polling; a new patch does not immediately refresh `ConfigurationData`.
+See the
 [setup and ingestion checks](docs/third-party-software-inventory.md#first-time-setup-in-a-new-workspace).
 
 For a collector that finds software locally but sends no inventory to Azure:

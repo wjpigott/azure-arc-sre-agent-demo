@@ -97,6 +97,16 @@ Inspect the deployed rule's `softwareSettings` and `inventorySettings`; these
 observed defaults are not an ingestion-time guarantee. Do not repeatedly
 reinstall a healthy extension just because the first query is empty.
 
+Inventory snapshots and change events have different schedules. Microsoft's
+[collection guidance](https://learn.microsoft.com/azure/azure-change-tracking-inventory/change-tracking-inventory-support-matrix#change-tracking-and-inventory-data-collection)
+states that `ConfigurationData` is populated during scheduled inventory
+cycles; detected changes go to `ConfigurationChange`, not an immediate
+inventory-table refresh. A 30-minute software poll is not a promise of a new
+full inventory snapshot. An AMA-only reinstall does not reset the existing
+collector's inventory baseline. After recovery, correlate fresh collector/AMA
+errors and the deployed inventory interval instead of assuming that another
+patch or an ordinary software scan must immediately populate both tables.
+
 You can save all three Live Reports while waiting for initial inventory.
 Record them as **deployed, data validation pending** until reopening/reloading
 shows the expected live results. Use the no-snapshot tracker so demonstration
@@ -277,8 +287,11 @@ At that checkpoint, `ConfigurationData` and `ConfigurationChange` still had
 no rows. This establishes **AMA recovery, not a confirmed inventory repair**
 or proof that the previously quoted invalid-log-type error was resolved.
 A subsequent targeted collector restart reported `StopServiceFailed`; no
-forced termination was attempted. Treat its final service state as a separate
-verification, not a successful restart.
+forced termination was attempted. A separate follow-up found the collector
+fully Stopped and explicitly started that same service again. Actual Run
+Command execution then succeeded with exit code zero and verified Running.
+Post-start inventory checks still returned no software rows. Record the failed
+stop, successful restoration, and still-unverified ingestion separately.
 
 The same investigation demonstrated why short diagnostic timeouts can mislead:
 a 90-second Run Command returned only its initial timestamp before execution
