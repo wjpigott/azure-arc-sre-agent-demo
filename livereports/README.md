@@ -169,6 +169,25 @@ Pass the existing report ID, so a new **version** is saved instead of a second r
   (one bundle at a time).
 - Scripted: add `--report-id <id>` to `install`.
 
+### After changing the telemetry workspace
+
+Installed reports retain their saved workspace bindings; changing a machine's
+DCR destination or the agent's workspace connection does not rewrite those
+reports. Reloading the old report still queries the old workspace.
+
+1. Verify Heartbeat and inventory in the intended new workspace first.
+2. Verify the agent's approved connection and query permissions for that
+   workspace. Use its **customer ID GUID** and **workspace resource group**,
+   not the agent's infrastructure workspace or the DCR resource group.
+3. Update each existing report's saved workspace/customer ID and resource-group
+   bindings, preserving the existing report ID. For a workspace-only repair,
+   preserve all other source, queries, metadata, and reference data.
+4. Complete any pending **SaveReport** approvals. A prepared edit or approval
+   request is not a completed save.
+5. Open each report's newly saved current version and reload. Verify its query
+   destination, fresh Heartbeat, and live software inventory. A blank result
+   from an old workspace is not evidence that AMA or the DCR is missing.
+
 ### Replace an older report that displays unfamiliar demo machines
 
 Older fleet and priority bundles contained pseudonymized sample names such as

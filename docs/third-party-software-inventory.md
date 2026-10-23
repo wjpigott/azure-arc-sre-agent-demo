@@ -28,15 +28,19 @@ additional resources do not repair an invalid workspace log type.
    ARM resource ID, and customer ID GUID. Do not select the SRE Agent's
    infrastructure/Application Insights workspace just because the wizard
    created it.
-2. **Install and verify AMA** on the pilot, with the appropriate operational
-   telemetry DCR associated to that machine and directed to the selected
-   workspace. Verify Heartbeat/Perf ingestion independently of extension state.
+2. **Inspect existing collection before adding anything.** List the pilot's
+   DCR associations and read each referenced rule, including rules managed by
+   policy. Use the [DCR preflight](#dcr-preflight-before-onboarding-or-expansion)
+   below. Reuse the intended Change Tracking rule rather than creating another
+   because the extension or inventory already exists.
 3. **Enable Change Tracking & Inventory** on the Arc machine through its
    **Operations > Change tracking** experience, following the current
    [Microsoft quickstart](https://learn.microsoft.com/azure/azure-change-tracking-inventory/quickstart-monitor-changes-collect-inventory-azure-change-tracking-inventory).
    Select or verify the intended workspace and Change Tracking DCR. For a
    custom DCR, follow the
    [DCR creation guide](https://learn.microsoft.com/azure/azure-change-tracking-inventory/create-data-collection-rule).
+   Verify both AMA and the OS-specific Change Tracking extension are installed
+   successfully; do not assume that a DCR association alone installed them.
 4. **Check workspace prerequisites.** A fresh workspace needs the
    **ChangeTracking solution** and the built-in tables used by the selected
    DCR, including `ConfigurationData` and, when collecting changes,
@@ -46,14 +50,82 @@ additional resources do not repair an invalid workspace log type.
    `ChangeTracking-Windows` or `ChangeTracking-Linux` extension, a Change
    Tracking DCR with software/inventory enabled, an association on the pilot,
    and the correct Log Analytics destination. Associate only one Change
-   Tracking DCR per machine. Operational telemetry and Change Tracking use
-   separate rules; an operational DCR alone does not collect software inventory.
+   Tracking DCR per machine. Keep the Change Tracking extension-based schema
+   intact: do not add Perf, Windows Event Log, or Syslog data sources to it.
 6. **Limit collection to the requirement.** Enable software/inventory for the
    tracker. File contents, registry tracking, and service changes are separate
    collection choices, not prerequisites for a software-only report.
-7. **Connect the agent to the workspace** and grant its managed identity
+7. **Validate the inventory-only pilot before expanding collection.** Require
+   fresh Heartbeat, software `ConfigurationData`, and, when change collection
+   is enabled and changes occur, `ConfigurationChange`. An operational DCR is
+   not required for inventory or Heartbeat. Only if Perf/Event/Syslog is also
+   required, add a separate operational rule through an approved change and
+   recheck both operational and inventory ingestion afterwards.
+8. **Connect the agent to the workspace** and grant its managed identity
    scoped Log Analytics Reader access. Verify availability of
    `system-mcp-monitor_monitor_workspace_log_query` before saving reports.
+
+### DCR preflight before onboarding or expansion
+
+Microsoft supports [multiple DCR associations per resource](https://learn.microsoft.com/azure/azure-monitor/data-collection/data-collection-rule-overview#data-collection-rule-associations-dcras).
+The Change Tracking-specific restriction is different: **only one Change
+Tracking DCR per resource; additional Change Tracking rules are ignored**.
+Microsoft also explicitly warns that
+[adding data sources to a Change Tracking DCR can cause collection to fail](https://learn.microsoft.com/azure/azure-change-tracking-inventory/create-data-collection-rule).
+Neither statement establishes that a separate operational rule corrupts the
+workspace schema.
+
+Before adding or changing associations:
+
+1. Read **all** existing associations and their referenced DCRs. Identify
+   Change Tracking by `dataSources.extensions[].extensionName`
+   (`ChangeTracking-Windows` / `ChangeTracking-Linux`) and
+   `Microsoft-Configuration*` streams, not the DCR's name or total rule count.
+   One portal-created DCR can contain both Windows and Linux extension
+   definitions; that is still one rule, not two associations.
+2. Require one intended Change Tracking DCR with software and inventory enabled
+   for the machine's OS. If multiple Change Tracking DCRs are associated, stop
+   onboarding and reconcile ownership/destination through an approved change;
+   do not silently choose the first rule or automatically delete associations.
+3. Follow its `dataFlows` destination names to
+   `destinations.logAnalytics[].workspaceResourceId`. Confirm the intended
+   workspace, its active ChangeTracking solution and built-in tables, and the
+   configured collection intervals. Do not invent custom table schemas or
+   internal AMA stream names to bypass a registration error.
+4. Keep operational sources in their own rule. Reuse an approved existing
+   operational rule if it already covers the requirement; avoid overlapping
+   collection and unintentional routing to another workspace.
+5. Check policy ownership before manual changes so remediation does not
+   recreate a removed association. Preserve a working inventory-only baseline;
+   adding performance collection is a separate change, not an inventory repair.
+
+Example read-only association inspection from PowerShell:
+
+```powershell
+$machineId = '/subscriptions/<subscription-id>/resourceGroups/<arc-resource-group>/providers/Microsoft.HybridCompute/machines/<machine-name>'
+$associations = az rest --method get `
+  --url "https://management.azure.com${machineId}/providers/Microsoft.Insights/dataCollectionRuleAssociations?api-version=2023-03-11" `
+  --output json
+if ($LASTEXITCODE -ne 0) { throw 'Could not read DCR associations.' }
+
+foreach ($association in (($associations | ConvertFrom-Json).value)) {
+    $ruleId = $association.properties.dataCollectionRuleId
+    if ($ruleId) {
+        az rest --method get `
+          --url "https://management.azure.com${ruleId}?api-version=2023-03-11" `
+          --query "{id:id,sources:properties.dataSources,flows:properties.dataFlows,destinations:properties.destinations}" `
+          --output json
+        if ($LASTEXITCODE -ne 0) { throw "Could not read DCR $ruleId." }
+    }
+}
+```
+
+This is inspection, not an installer or automatic conflict resolver.
+[`Deploy-SreTelemetry.ps1`](../scripts/Deploy-SreTelemetry.ps1) creates only
+operational rules and associations. It does not install AMA/Change Tracking,
+initialize inventory tables, or run this preflight. Its scope is every connected
+Arc machine in the subscription, and its templates use `centralus`; do not use
+it as an inventory-only or single-pilot onboarding command.
 
 ### New-workspace errors
 
@@ -63,6 +135,8 @@ additional resources do not repair an invalid workspace log type.
 | Table creation `SolutionNotActive` for `ConfigurationData` | Enable the ChangeTracking solution for the selected workspace first. |
 | `ConfigurationChangeV2` is unavailable | Do not assume every stream in a sample template is available. Use the supported streams/tables required for the scenario, such as `Microsoft-ConfigurationData` and `Microsoft-ConfigurationChange`; do not create a custom lookalike table as a workaround. |
 | Extension succeeds but `ConfigurationData` is empty | Check the DCR association, enabled collection categories, destination, elapsed collection interval, and AMA ingestion health. Do not interpret empty data as an empty software estate. |
+| Built-in tables exist but AMA rejects an internal log type | Capture the table registration metadata as well as columns, solution linkage, and current errors. Matching columns and successful ARM provisioning do not prove ingestion works. Do not manually change a table subtype to match another workspace. |
+| Heartbeat or inventory exists in the new workspace but a report is blank/stale | Inspect the saved report's workspace customer ID and workspace resource group. Save an updated version using the existing report ID, approve pending saves, then reopen the current version. Reload alone does not change saved bindings. |
 
 ### Verify actual ingestion
 
@@ -111,6 +185,14 @@ You can save all three Live Reports while waiting for initial inventory.
 Record them as **deployed, data validation pending** until reopening/reloading
 shows the expected live results. Use the no-snapshot tracker so demonstration
 fallback data cannot be mistaken for successful collection.
+
+When changing workspaces, validate the collection destination and report
+destination separately. Update the agent's approved workspace access and every
+installed report's workspace customer ID/resource group; see
+[workspace-change report updates](../livereports/README.md#after-changing-the-telemetry-workspace).
+Missing Heartbeat in a report's selected workspace does not prove a missing
+DCR. Compare the exact machine ARM resource ID (`_ResourceId`) in the intended
+workspace before making repairs.
 
 ## Windows Arc AMA recovery
 
@@ -273,6 +355,57 @@ See Microsoft's [AMA installation and management guidance](https://learn.microso
 and [Change Tracking architecture](https://learn.microsoft.com/azure/azure-change-tracking-inventory/overview-monitoring-agent).
 
 ## Validated lab evidence
+
+### 2026-10-23: successful portal re-onboarding to a new workspace
+
+After the operator replaced the earlier associations and enabled Change
+Tracking against a new workspace, read-only checks on the Windows Arc pilot
+confirmed:
+
+- Exactly one association, to a portal-created `ct-dcr-*` rule. It contains
+  Windows and Linux Change Tracking extension definitions, not operational
+  Perf/Event/Syslog sources.
+- AMA `1.45.0.0` and Change Tracking `2.42.0.0` provisioned successfully with
+  automatic upgrade enabled.
+- Windows software and inventory enabled, at 1,800-second software and
+  36,000-second inventory intervals.
+- ChangeTracking solution and built-in `ConfigurationData` /
+  `ConfigurationChange` tables provisioned successfully. The DCR also declares
+  `Microsoft-ConfigurationChangeV2`; that declaration alone does not prove a
+  separately queryable V2 table is available.
+- In the last 24 hours, scoped to the pilot's exact ARM resource ID:
+  1,441 Heartbeats (latest 13:40 UTC), 48 software inventory rows (latest
+  09:55 UTC), 654 service inventory rows (latest 10:55 UTC), and 128 change
+  rows (latest 13:25 UTC).
+
+No Perf/Event rows were returned for that pilot in this workspace/time window.
+Inventory health therefore does not establish operational performance/event
+coverage. No additional operational DCR was attached during this review.
+
+The old DCR resources were no longer present when reviewed, so their definitions
+could not be compared directly. The earlier diagnostic record identified one
+operational rule and one Change Tracking rule, not two Change Tracking rules.
+Read-only table GETs using the same ARM API version (`2022-10-01`) found a
+concrete registration difference: both old `ConfigurationData` and
+`ConfigurationChange` tables reported `schema.tableSubType =
+DataCollectionRuleBased`, while both working tables reported `Any`. Both
+workspaces reported Microsoft tables, ChangeTracking solution linkage, and
+successful provisioning. `ConfigurationData` had the same 64 column names/types
+in both workspaces. This narrows the investigation beyond column definitions
+but does not establish why registration differed or which component caused the
+failure. Do not patch `tableSubType`, delete/recreate built-in tables, or treat
+`Any` as a universal installation requirement based on this observation.
+
+Workspace replacement and collector re-onboarding changed multiple variables:
+this is evidence of a working replacement, **not proof that multiple DCRs
+caused a schema bug**, nor proof that the previous installation was healthy.
+The prior invalid-log-type failure remains unconfirmed at the root-cause level.
+Do not require a new workspace for every new machine or reproduce the suspected
+failure on this now-working pilot.
+
+The installed reports initially retained the old workspace bindings. Updating
+and approving their saved versions resolved the separately observed report
+failure; reinstalling AMA or adding another DCR was not required for that fix.
 
 ### 2026-10-20: AMA recovery checkpoint
 

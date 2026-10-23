@@ -26,9 +26,13 @@ are not proof that a new environment is ready. Use this order:
    machines and a Log Analytics workspace for their data. The workspace created
    for the SRE Agent's Application Insights is not automatically the Arc
    telemetry destination.
-3. **Enable collection before interpreting reports.** Install AMA, associate
-   the operational telemetry DCR, and enable Change Tracking & Inventory with
-   its own DCR. The [clean-workspace inventory steps](docs/third-party-software-inventory.md#first-time-setup-in-a-new-workspace)
+3. **Enable collection before interpreting reports.** For inventory/change
+   tracking, use the supported onboarding flow to provision AMA, Change
+   Tracking, and one dedicated Change Tracking DCR. Verify ingestion before
+   optionally adding a separate operational DCR for Perf/Event/Syslog; that
+   extra rule is not required for software inventory or Heartbeat. Never add
+   ordinary data sources to the Change Tracking DCR.
+   The [clean-workspace inventory steps](docs/third-party-software-inventory.md#first-time-setup-in-a-new-workspace)
    cover prerequisites and ingestion checks. The telemetry script alone does
    not install these extensions or enable inventory.
 4. **Create and configure the agent.** Follow the
@@ -1243,6 +1247,15 @@ subscription, creates/updates the two operational DCRs, and associates them;
 it does not install AMA or Change Tracking. Review and approve that scope first.
 There is no built-in `-WhatIf` or machine filter.
 
+This is an **optional operational-telemetry deployment**, not an inventory
+installer. It does not provision the ChangeTracking workspace solution/tables,
+create or validate a Change Tracking DCR, or check existing associations for
+conflicts. Complete the
+[inventory onboarding and DCR preflight](docs/third-party-software-inventory.md#dcr-preflight-before-onboarding-or-expansion)
+first. The checked-in operational templates target `centralus`; review the
+destination region before using them elsewhere. Do not run this command merely
+to fix an empty inventory report or restore a second rule on a working pilot.
+
 ```powershell
 .\scripts\Deploy-SreTelemetry.ps1 `
   -SubscriptionId "<subscription-id>" `
@@ -1264,9 +1277,12 @@ Use the query in [queries/telemetry-ingestion.kql](queries/telemetry-ingestion.k
 Software inventory requires **both AMA and the Change Tracking extension**,
 the workspace's **ChangeTracking solution and built-in tables**, and one
 software/inventory-enabled Change Tracking DCR associated with each machine.
-An additional operational telemetry DCR is expected; two DCRs do not mean two
-Change Tracking rules. The telemetry deployment script does not install these
-extensions or enable Change Tracking.
+An additional operational telemetry DCR is needed only for the separate
+Perf/Event/Syslog requirements, not inventory or Heartbeat. Multiple DCRs are
+supported generally, but only one Change Tracking DCR is supported per machine.
+Keep that rule's extension-based schema separate from ordinary data sources.
+The telemetry deployment script does not install these extensions or enable
+Change Tracking.
 
 Validate `ConfigurationData` separately from Heartbeat, extension provisioning,
 and Azure Update Manager (AUM). Successful patching does not prove inventory
