@@ -305,13 +305,16 @@ For the new Gallery version, set the package download filename to
 `chrome-enterprise-msi.zip`. Configure this install command (Windows `cmd.exe`):
 
 ```text
-tar.exe -xf chrome-enterprise-msi.zip && powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\Install-Chrome.ps1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '.\chrome-enterprise-msi.zip' -DestinationPath '.\ChromePackage' -Force; & '.\ChromePackage\Install-Chrome.ps1'"
 ```
 
-This requires `tar.exe` on the target; validate that prerequisite during the
-pilot. Use the same reviewed command for the Gallery update action if that
-action is configured. `ExecutionPolicy Bypass` affects this process only and
-is not a substitute for package review or signature/hash validation.
+This requires Windows PowerShell 5.0 or newer; Server 2016 includes 5.1.
+Do not depend on `tar.exe`, which is not included in Server 2016.
+Extraction errors stop the command before the installer runs. Use the same
+reviewed command for the Gallery update action if that action is configured.
+`ExecutionPolicy Bypass` affects this process only and is not a substitute for
+package review or signature/hash validation. Publish command changes as a new
+Gallery version while retaining the approved MSI's full vendor version and hashes.
 
 The helper runs:
 
@@ -356,9 +359,12 @@ The same helper supports guarded MSI removal:
     -ExpectedVersion "<approved-four-part-chrome-version>"
 ```
 
-For the Gallery remove action, extract the package first, then invoke this
-command with `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
--File .\Install-ChromeEnterpriseMsi.ps1` and the reviewed parameters.
+For the Gallery remove action, use the same extraction method:
+
+```text
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '.\chrome-enterprise-msi.zip' -DestinationPath '.\ChromePackage' -Force; & '.\ChromePackage\Install-ChromeEnterpriseMsi.ps1' -Uninstall -ProductCode '<approved-msi-product-code-in-braces>' -ExpectedVersion '<approved-four-part-chrome-version>'"
+```
+
 Removal requires the exact ProductCode and version in HKLM; a different version
 or unregistered executable blocks automatic removal. The helper waits for
 `msiexec /x`, suppresses automatic reboot, logs the result, and verifies that
@@ -394,6 +400,33 @@ non-administrator user accounts, check `chrome://policy`, and wait for fresh
 Change Tracking inventory. Existing browser/update policies or per-user copies
 may need a separate reviewed migration. See
 [Google's Windows MSI deployment guidance](https://support.google.com/chrome/a/answer/7650247).
+
+#### Extraction compatibility audit (2026-11-04)
+
+The lab's `ArcPatchingCUS` Gallery was inspected across all published application
+versions. This is deployment evidence, not a default customer version mapping:
+
+| Application | Gallery versions | Extraction dependency |
+| --- | --- | --- |
+| Chrome | `156.8078.49` | Windows PowerShell `Expand-Archive` for install, update, and removal. |
+| Chrome | `156.8078.48` | `tar.exe` for install, update, and removal. |
+| 7-Zip | `26.03.00`, `26.03.01`, `26.03.02`, `26.4.0`, `26.5.0` | `tar` for installation; `26.5.0` also uses it for update. Removal invokes the uninstaller directly. |
+| Java | `8.0.511` | `tar.exe` for install, update, and removal. |
+| Python | `3.15.0`, `3.15.1` | `tar.exe` for install, update, and removal. |
+
+Chrome Gallery version `156.8078.49` retains vendor version `156.0.8078.48`
+and the original ZIP/MSI hashes. Installation on the Server 2016 pilot
+`WS2016ESU` verified the exact Program Files executable version, HKLM MSI
+ProductCode/version, MSI exit code `0`, and no reboot requirement. Reapplying
+the same assignment succeeded as a no-op; it did not rerun the installer.
+Live removal was not tested. The other applications were audited only, not
+republished or redeployed. Their `tar` dependency still requires remediation
+before targeting Server 2016; publish separately reviewed new versions rather
+than changing the retained versions in place.
+
+The repository's Chrome command examples are exercised with mocked launchers
+by `tests\Test-ChromeArchiveCommands.ps1`, including failed-extraction and
+installer-error propagation under Windows PowerShell.
 
 ## Monitor VM Applications
 

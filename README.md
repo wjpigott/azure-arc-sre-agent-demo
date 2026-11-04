@@ -170,8 +170,12 @@ reviewed pinned launcher named `Install-Chrome.ps1` together. The Windows
 `cmd.exe` command is:
 
 ```text
-tar.exe -xf chrome-enterprise-msi.zip && powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\Install-Chrome.ps1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '.\chrome-enterprise-msi.zip' -DestinationPath '.\ChromePackage' -Force; & '.\ChromePackage\Install-Chrome.ps1'"
 ```
+
+This requires Windows PowerShell 5.0 or newer (5.1 is included in Server 2016).
+Unlike `tar.exe`, it does not require Server 2019 or newer. Extraction errors
+stop the command before installation; the pinned launcher's safety checks remain.
 
 For removal, use the helper from the extracted approved package:
 
@@ -181,9 +185,12 @@ For removal, use the helper from the extracted approved package:
   -ExpectedVersion "<approved-four-part-chrome-version>"
 ```
 
-For a Gallery remove action, extract the ZIP first and invoke that helper with
-`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File`,
-passing the same reviewed ProductCode and version.
+For a Gallery remove action, use the same extraction method and the reviewed
+ProductCode and version:
+
+```text
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '.\chrome-enterprise-msi.zip' -DestinationPath '.\ChromePackage' -Force; & '.\ChromePackage\Install-ChromeEnterpriseMsi.ps1' -Uninstall -ProductCode '<approved-msi-product-code-in-braces>' -ExpectedVersion '<approved-four-part-chrome-version>'"
+```
 
 The helper waits for these underlying MSI commands and verifies the result;
 these are documented for reference, not a replacement for its hash, signer,
@@ -459,6 +466,7 @@ Run the dependency-free mocked checks without installing Chrome:
 
 ```powershell
 .\tests\Test-ChromeEnterpriseMsi.ps1
+.\tests\Test-ChromeArchiveCommands.ps1
 .\tests\Test-ArcVmApplicationStorageRole.ps1
 ```
 
