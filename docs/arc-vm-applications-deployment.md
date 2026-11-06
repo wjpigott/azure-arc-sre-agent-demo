@@ -273,6 +273,12 @@ quoting before changing blob type.
 
 ### Chrome Enterprise MSI: machine-wide deployment
 
+**Historical recipe:** the current demo uses
+[Chrome ZIP with portal add and CLI removal](../README.md#chrome-zip-install-and-uninstall).
+The earlier MSI auto-updated beyond its assigned version. Retain these MSI
+steps and evidence for reference; neither MSI nor a web-installer ZIP alone
+enforces the installed browser version.
+
 The EXE pilot started processes but did not establish a verified installation.
 Do not reuse `chrome_installer_uncompressed.exe /silent /install` as the
 deployment recipe. Use Google's **Chrome Enterprise standalone x64 MSI** for
@@ -427,6 +433,51 @@ than changing the retained versions in place.
 The repository's Chrome command examples are exercised with mocked launchers
 by `tests\Test-ChromeArchiveCommands.ps1`, including failed-extraction and
 installer-error propagation under Windows PowerShell.
+
+### Current Chrome ZIP workflow: tested version 157.8103.2
+
+On 2026-11-06 the operator reported successful installation of `chromezip` and
+7-Zip using the portal's new **Add application** option on a new machine, followed
+by successful CLI removal. The operator identified Chrome Gallery version
+`157.8103.2`. Its published state and exact install/remove actions were read
+from Azure; [config/chromezip-tested-commands.json](../config/chromezip-tested-commands.json)
+preserves them without package URLs or credentials. Readable copies are
+[Install-ChromeZip.ps1](../scripts/Install-ChromeZip.ps1) and
+[Remove-ChromeZip.ps1](../scripts/Remove-ChromeZip.ps1).
+
+This version extracts `ChromeSetup.zip` into `chrome_x`, runs the first EXE
+with `/silent /install`, waits, and checks `chrome.exe` presence. Removal does
+not use the package cache: it closes Chrome and runs either the registered
+MSI ProductCode's uninstall or an installed `Installer\setup.exe` with
+`--uninstall --system-level --force-uninstall`, then checks executable absence.
+The version does **not** invoke `Invoke-ChromeExePackage.ps1` or use the older
+`chromezip-remove-command.json`; do not substitute those commands when reproducing
+this test.
+
+**Known portal limitation:** deleting the application through the portal remains
+unresolved. Use the [CLI machine-assignment removal workaround](../README.md#portal-add-and-cli-removal-workaround)
+under explicit target approval. Do not delete Gallery definitions/versions to
+uninstall from a machine. The successful cycle is operator-reported evidence;
+no fresh guest inspection or portal-delete fix was performed for this documentation
+update, and the new machine's name and installed browser version were not supplied.
+
+The earlier MSI auto-updated beyond its assigned version. The ZIP is the tested
+demo packaging choice, **not a version-pinning solution**: the web installer
+requires guest internet access, its payload can change, and the installed browser
+can auto-update. Record actual executable/registration versions separately from
+the three-part Gallery version. An approved offline artifact and update policy
+are needed for controlled browser-version rings.
+
+The snapshot deliberately retains the published behavior, not the safety
+guarantees of the guarded helpers. There is no hash/signature or exit-code
+validation, the first matching EXE/registration/setup is selected, and removal
+checks only executable absence (not registration absence). Closing Chrome can
+discard unsaved work. Review these limitations and verify guest postconditions
+before broader use; publish any hardened changes as a separately tested version.
+
+`tests\Test-ChromeZipCommands.ps1` checks that both readable scripts match the
+published command snapshot and exercises installation/removal with mocked
+processes; it does not install software or change Azure resources.
 
 ## Monitor VM Applications
 

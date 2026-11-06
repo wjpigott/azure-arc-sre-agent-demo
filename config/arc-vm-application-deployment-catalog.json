@@ -29,7 +29,7 @@
     {
       "productName": "Google Chrome",
       "galleryName": "<gallery-name>",
-      "galleryApplicationName": "chromewin",
+      "galleryApplicationName": "chromezip",
       "rings": {
         "Canary": {
           "vendorVersion": "<approved-chrome-vendor-version>",

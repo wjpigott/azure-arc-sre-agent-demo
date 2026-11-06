@@ -1,7 +1,6 @@
 $ErrorActionPreference = "Stop"
 
 $documents = @(
-    (Join-Path $PSScriptRoot "..\README.md"),
     (Join-Path $PSScriptRoot "..\docs\arc-vm-applications-deployment.md")
 )
 $commands = @()

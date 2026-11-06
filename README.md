@@ -120,8 +120,9 @@ Use representative out-of-support and aging test machines to prove version class
 
 ## Applications and install/uninstall commands
 
-The deployment catalog currently covers **7-Zip** and **Google Chrome Enterprise
-x64 MSI**. Its sample Gallery application names, `7zipexe` and `chromewin`, are
+The current application demo uses **7-Zip** and **Google Chrome ZIP**
+(`chromezip`), replacing the earlier Chrome Enterprise MSI recipe. Gallery
+application names such as `7zipexe`, `chromezip`, and the historical `chromewin` are
 examples, not required names. Customers choose their own Gallery/application
 names and configure each product's `galleryName` and `galleryApplicationName` in
 the [deployment catalog](config/arc-vm-application-deployment-catalog.json)
@@ -133,17 +134,19 @@ Gallery/application selection only if the result remains ambiguous. Resolve
 exact IDs internally for access checks and operator commands; never silently
 pick the first match or rename resources to match an example. See
 [customer-defined resource names](docs/arc-vm-applications-deployment.md#customer-defined-resource-names).
-Chrome is an application in this
-demo, not just an inventory item. Its successful pilot verified vendor version
-`155.0.8059.40`, mapped explicitly to Gallery version `155.0.8059`; this is
-historical deployment evidence, not approval to deploy that version elsewhere.
+Chrome is an application in this demo, not just an inventory item. The operator
+reported successful Chrome ZIP and 7-Zip installation through the portal's new
+**Add application** option and removal through CLI on a new machine. The tested
+Chrome Gallery version is `157.8103.2`; this is lab evidence, not approval to
+deploy that version elsewhere. **Portal application deletion remains unresolved;
+use CLI removal for the approved machine assignment.**
 The public Chrome catalog remains blocked until artifact and scope placeholders
 are reviewed and resolved.
 
 | Application | Deployment status | Install command | Uninstall command |
 | --- | --- | --- | --- |
-| Google Chrome Enterprise x64 MSI | Machine-wide MSI pilot verified; live removal and multi-user validation are not yet recorded as tested. | Approved MSI ZIP and pinned launcher; commands below. | Guarded MSI helper with the approved ProductCode and exact version; command below. |
-| 7-Zip | Catalog-driven Canary target `26.03.0`; retained rollback assignment `0.0.4`. | Read the exact Gallery version's install action before deployment. The recorded fragment `ren 7z2603 7z2603.zip` needs filename validation; it is not a complete install recipe. | No verified complete remove command is recorded in this repository. Inspect and review the Gallery remove action before use. |
+| Google Chrome ZIP (`chromezip`) | Portal add and CLI removal reported successful on a new machine with Gallery version `157.8103.2`; portal delete remains unresolved. | [Tested install script](scripts/Install-ChromeZip.ps1); extracts `ChromeSetup.zip` and runs the web installer. | [Tested remove script](scripts/Remove-ChromeZip.ps1); uses the installed uninstaller, without the ZIP cache. |
+| 7-Zip | Portal add and CLI removal reported successful on a new machine; no exact version was supplied for this test. | Inspect the exact tested Gallery version; no new 7-Zip command snapshot is included here. | Inspect its Gallery remove action; do not infer commands from Chrome's recipe. |
 | Adobe Acrobat | Inventory/baseline assessment only. | Not recorded or approved. | Not recorded or approved. |
 | Python | Inventory/baseline assessment only. | Not recorded or approved. | Not recorded or approved. |
 | Oracle Java 8 | Inventory/baseline assessment only. | Not recorded or approved. | Not recorded or approved. |
@@ -152,59 +155,66 @@ Inventory coverage does not imply installation or removal support. Do not
 substitute guessed silent switches, a different installer type, or a no-op
 remove command. All changes require approval of the exact artifact and target.
 
-### Chrome install and uninstall
+### Chrome ZIP install and uninstall
 
-Run as SYSTEM or an elevated administrator on supported x64 Windows. From the
-approved package directory, the install helper accepts:
+The [command snapshot](config/chromezip-tested-commands.json) preserves the
+**exact published install/remove commands** read from `chromezip` Gallery
+version `157.8103.2` on 2026-11-06. The readable
+[install](scripts/Install-ChromeZip.ps1) and
+[remove](scripts/Remove-ChromeZip.ps1) scripts contain those same command bodies.
+They are not yesterday's guarded EXE helper or the older MSI package.
+
+The install action extracts `ChromeSetup.zip` to `chrome_x`, selects the first
+EXE, runs `/silent /install`, waits, and checks for machine-wide `chrome.exe`.
+It requires Windows PowerShell 5+ and internet access from the guest. The remove
+action closes Chrome, uses the registered MSI ProductCode if present or an
+installed Chrome `Installer\setup.exe`, waits, and checks that `chrome.exe` is
+absent. It does not require the original ZIP or pin removal to the original
+browser version. Closing Chrome can discard unsaved work.
+
+**Version caveat:** the earlier MSI installation auto-updated beyond its assigned
+version. Switching to the ZIP is not an auto-update block: `ChromeSetup.exe`
+downloads a changing browser payload, and Chrome can still update afterward.
+Gallery version `157.8103.2` identifies the package/actions, not a guaranteed
+installed browser version. Record the actual executable and HKLM registration
+versions; controlled version rings require separately approved update policies
+and a version-pinned offline artifact.
+
+These scripts deliberately preserve the tested actions, including their
+limitations: they do not validate hashes/signatures or installer exit codes;
+installation selects the first EXE and removal the first matching registration
+or setup path. File presence/absence is not complete installation/removal proof.
+Review fresh registration and guest evidence before expanding beyond the lab.
+The historical [MSI guide](docs/arc-vm-applications-deployment.md#chrome-enterprise-msi-machine-wide-deployment)
+and guarded helpers remain for reference, not as the current Chrome recipe.
+
+### Portal add and CLI removal workaround
+
+On the approved Arc machine, use the portal's **Add application** option to
+select the exact reviewed Gallery version. For removal, delete **only the machine
+application assignment**, which invokes that version's remove action; do not
+delete the Gallery application/version or the Arc machine.
+
+The ARM CLI form avoids dependence on an extension-specific delete command:
 
 ```powershell
-.\Install-ChromeEnterpriseMsi.ps1 `
-  -MsiPath ".\GoogleChromeStandaloneEnterprise64.msi" `
-  -ExpectedVersion "<approved-four-part-chrome-version>" `
-  -ExpectedSha256 "<approved-msi-sha256>" `
-  -ExpectedSignerSubject "<exact-approved-authenticode-signer-subject>"
+$subscriptionId = "<subscription-id>"
+$machineResourceGroup = "<arc-machine-resource-group>"
+$machineName = "<approved-machine>"
+$applicationName = "chromezip" # Use the actual machine application assignment name.
+$assignmentUri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$machineResourceGroup/providers/Microsoft.HybridCompute/machines/$machineName/applications/$applicationName`?api-version=2026-02-01-preview"
+
+az rest --subscription $subscriptionId --method get --url $assignmentUri --output json
+if ($LASTEXITCODE -ne 0) { throw "Unable to read the application assignment; do not delete." }
+# Confirm the returned packageReferenceId is the approved version before this write.
+az rest --subscription $subscriptionId --method delete --url $assignmentUri --output none
+if ($LASTEXITCODE -ne 0) { throw "Application assignment removal request failed." }
 ```
 
-For the Gallery install/update action, package the helper, approved MSI, and a
-reviewed pinned launcher named `Install-Chrome.ps1` together. The Windows
-`cmd.exe` command is:
-
-```text
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '.\chrome-enterprise-msi.zip' -DestinationPath '.\ChromePackage' -Force; & '.\ChromePackage\Install-Chrome.ps1'"
-```
-
-This requires Windows PowerShell 5.0 or newer (5.1 is included in Server 2016).
-Unlike `tar.exe`, it does not require Server 2019 or newer. Extraction errors
-stop the command before installation; the pinned launcher's safety checks remain.
-
-For removal, use the helper from the extracted approved package:
-
-```powershell
-.\Install-ChromeEnterpriseMsi.ps1 -Uninstall `
-  -ProductCode "<approved-msi-product-code-in-braces>" `
-  -ExpectedVersion "<approved-four-part-chrome-version>"
-```
-
-For a Gallery remove action, use the same extraction method and the reviewed
-ProductCode and version:
-
-```text
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '.\chrome-enterprise-msi.zip' -DestinationPath '.\ChromePackage' -Force; & '.\ChromePackage\Install-ChromeEnterpriseMsi.ps1' -Uninstall -ProductCode '<approved-msi-product-code-in-braces>' -ExpectedVersion '<approved-four-part-chrome-version>'"
-```
-
-The helper waits for these underlying MSI commands and verifies the result;
-these are documented for reference, not a replacement for its hash, signer,
-version, registration, and post-install/removal checks:
-
-```text
-msiexec.exe /i "<approved-msi>" /qn /norestart ALLUSERS=1 REBOOT=ReallySuppress /L*v "<local-log>"
-msiexec.exe /x <approved-msi-product-code-in-braces> /qn /norestart REBOOT=ReallySuppress /L*v "<local-log>"
-```
-
-Neither operation automatically reboots. Exit code `3010` requires a separately
-approved reboot and revalidation. Removal preserves browser profiles and is
-recovery to an absent machine-wide installation, not a downgrade or verified
-rollback. See the [Chrome MSI packaging and validation guide](docs/arc-vm-applications-deployment.md#chrome-enterprise-msi-machine-wide-deployment).
+Deletion is asynchronous. Check that the assignment disappears and independently
+verify Chrome executable and machine-wide uninstall registration absence. A
+successful DELETE response alone is not uninstall proof. This documents the
+CLI workaround, not a fix or a verified root cause for portal deletion.
 
 ### Inspect the exact Gallery package commands
 
@@ -425,7 +435,11 @@ Also complete the immutable source, SHA-256, signer evidence, package file
 name, install/remove commands, rollback version, target region, and pilot
 machine before changing the staging status.
 
-#### Chrome Enterprise MSI pilot
+#### Historical Chrome Enterprise MSI pilot
+
+The current demo uses the [tested Chrome ZIP flow](#chrome-zip-install-and-uninstall).
+The following MSI evidence and assignment example are retained for reference,
+not as a recommendation to replace the working `chromezip` package.
 
 Use a **Chrome Enterprise standalone x64 MSI** for a machine-wide installation
 on supported 64-bit Windows targets. The earlier EXE pilot started processes
